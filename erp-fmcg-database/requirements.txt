@@ -1,0 +1,14 @@
+# ERP-FMCG Database Pack - Python dependencies
+# Phase 4 (MS SQL Server 2022 migration pipeline)
+#
+# Cai dat:
+#   python -m pip install -r requirements.txt
+#
+# Ghi chu:
+# - pyodbc yeu cau ODBC Driver 17/18 for SQL Server (Windows: "ODBC Driver 17 for SQL Server")
+# - Pipeline CHI dung stdlib + pyodbc (khong can pandas) -> nhanh va it phu thuoc
+
+pyodbc>=5.0.0
+
+# Tuy chon: dung cho bao cao doi soat mo rong (scripts/02_verify_data.py)
+# pandas>=2.0.0

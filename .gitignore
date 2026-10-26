@@ -1,0 +1,47 @@
+# ===== .NET / C# =====
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+
+# ===== Node / Driver App =====
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ===== Dữ liệu lớn — KHÔNG commit =====
+*.csv
+*.xlsx
+*.xls
+*.bak
+*.zip
+migration_data/*
+!migration_data/README.md
+!migration_data/.gitkeep
+
+# ===== Secrets =====
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+appsettings.Local.json
+*.pfx
+*.key
+secrets*.json
+
+# ===== IDE / OS =====
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ===== Log =====
+*.log
+logs/
