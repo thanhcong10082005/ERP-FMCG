@@ -1,0 +1,257 @@
+name: CI — ERP FMCG (Phase 6C.1)
+
+# ===================================================================
+# ★ PHASE 6C.1 — CI/CD
+# -------------------------------------------------------------------
+# Pipeline:
+#   1. build_schema.py        -> 01_schema.sql phai khop file nguon
+#   2. build_verify_sql.py    -> 02_verify.sql phai khop registry
+#   3. dotnet restore/build    -> 0 error, warning = error
+#   4. dotnet test            -> tat ca PASS
+#   5. npm ci + npm run build -> 0 loi TypeScript, PWA sinh manifest + sw
+#   6. Kiem tra bao mat: khong co secret trong repo
+#
+# Fail build neu BAT KY check nao fail.
+# ===================================================================
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+# Cancel run cu neu commit moi den (tiet kiem runner).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  # -------------------------------------------------------------------
+  # JOB 1 — Database: schema + verify registry phai khop
+  # -------------------------------------------------------------------
+  database:
+    name: Database - schema & verify consistency
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('erp-fmcg-database/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r erp-fmcg-database/requirements.txt
+
+      # --- 6C.3: 01_schema.sql la file SINH, phai khop file nguon ---
+      - name: Build schema from sources
+        working-directory: erp-fmcg-database
+        run: |
+          python scripts/build_schema.py
+          git diff --exit-code -- 01_schema.sql
+
+      # --- 6C.3: 02_verify.sql la file SINH, phai khop registry ---
+      - name: Build verify SQL from registry
+        working-directory: erp-fmcg-database
+        run: |
+          python scripts/build_verify_sql.py
+          git diff --exit-code -- 02_verify.sql
+
+      # --- Compile check: moi file .sql phai can bang ngoac ---
+      - name: Syntax check all SQL files
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          bad = []
+          for p in pathlib.Path('erp-fmcg-database').rglob('*.sql'):
+              if 'node_modules' in str(p):
+                  continue
+              text = p.read_text(encoding='utf-8-sig', errors='replace')
+              stripped = re.sub(r'--.*$', '', text, flags=re.M)
+              if stripped.count('(') != stripped.count(')'):
+                  bad.append((str(p), stripped.count('('), stripped.count(')')))
+          if bad:
+              for f, o, c in bad:
+                  print(f'[FAIL] {f}: ngoac "(" = {o}, ")" = {c}')
+              sys.exit(1)
+          print('[PASS] tat ca file .sql co ngoac can bang.')
+          PY
+
+  # -------------------------------------------------------------------
+  # JOB 2 — Backend .NET 8: build + test
+  # -------------------------------------------------------------------
+  backend:
+    name: Backend - build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        working-directory: erp-fmcg-backend-csharp
+        run: dotnet restore ERP-FMCG.sln
+
+      # 6C.7 (security): khong duoc con package co advisory muc cao.
+      - name: Audit NuGet vulnerabilities
+        working-directory: erp-fmcg-backend-csharp
+        run: dotnet list ERP-FMCG.sln package --vulnerable --include-transitive
+
+      - name: Build
+        working-directory: erp-fmcg-backend-csharp
+        run: |
+          dotnet build ERP-FMCG.sln --configuration Release --no-restore -warnaserror
+
+      - name: Test
+        working-directory: erp-fmcg-backend-csharp
+        run: |
+          dotnet test ERP-FMCG.sln --configuration Release --no-build --logger "trx;LogFileName=tests.trx" --results-directory ${{ github.workspace }}/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: ${{ github.workspace }}/test-results
+          retention-days: 14
+
+  # -------------------------------------------------------------------
+  # JOB 3 — Driver App PWA: npm ci + build + kiem tra PWA artifacts
+  # -------------------------------------------------------------------
+  driver:
+    name: Driver PWA - build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: erp-fmcg-driver/package-lock.json
+
+      - name: npm ci
+        working-directory: erp-fmcg-driver
+        run: npm ci
+
+      - name: Type check
+        working-directory: erp-fmcg-driver
+        run: npx tsc --noEmit
+
+      - name: Build (PWA)
+        working-directory: erp-fmcg-driver
+        run: npm run build
+
+      # 6C.7: build PWA phai sinh manifest + service worker.
+      - name: Verify PWA artifacts
+        working-directory: erp-fmcg-driver
+        run: |
+          set -e
+          test -f dist/manifest.webmanifest || { echo "[FAIL] thieu manifest.webmanifest"; exit 1; }
+          test -f dist/sw.js          || { echo "[FAIL] thieu service worker sw.js"; exit 1; }
+          test -f dist/index.html     || { echo "[FAIL] thieu index.html"; exit 1; }
+          for icon in dist/icons/icon-192.png dist/icons/icon-512.png dist/icons/icon-512-maskable.png; do
+            test -f "$icon" || { echo "[FAIL] thieu icon $icon"; exit 1; }
+          done
+          echo "[PASS] PWA artifacts day du (manifest, sw.js, icons)."
+
+      - name: Upload PWA build
+        uses: actions/upload-artifact@v4
+        with:
+          name: driver-pwa-dist
+          path: erp-fmcg-driver/dist
+          retention-days: 14
+
+  # -------------------------------------------------------------------
+  # JOB 4 — Security: khong co secret bi commit
+  # -------------------------------------------------------------------
+  security:
+    name: Security - secret scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 6C.5 (risk #10): JWT signing key KHONG duoc commit len GitHub.
+      #   - appsettings.json        : "SigningKey" phai RONG
+      #   - appsettings.Development : chi duoc phep chua key prefix "DEV-"
+      #   - appsettings.Local/Prod  : KHONG duoc commit
+      #   - .env / .env.production   : KHONG duoc commit
+      - name: Scan for committed secrets
+        run: |
+          set -e
+          FAIL=0
+          for f in erp-fmcg-backend-csharp/src/ERP.FMC.Api/appsettings.Local.json \
+                   erp-fmcg-backend-csharp/src/ERP.FMC.Api/appsettings.Production.json \
+                   erp-fmcg-driver/.env erp-fmcg-driver/.env.production; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "[FAIL] file secret bi commit: $f"
+              FAIL=1
+            fi
+          done
+
+          # Key that trong appsettings.json (file commit) phai RONG.
+          if grep -qE '"SigningKey"\s*:\s*"[^"]+"' erp-fmcg-backend-csharp/src/ERP.FMC.Api/appsettings.json; then
+            echo "[FAIL] appsettings.json dang chua SigningKey khoang rong."
+            FAIL=1
+          fi
+
+          # appsettings.Development.json chi duoc phep key prefix DEV-.
+          if grep -oE '"SigningKey"[[:space:]]*:[[:space:]]*"[^"]*"' \
+               erp-fmcg-backend-csharp/src/ERP.FMC.Api/appsettings.Development.json \
+               | grep -vE '"SigningKey"[[:space:]]*:[[:space:]]*"DEV-' >/dev/null; then
+            echo "[FAIL] appsettings.Development.json chua key khong phai prefix DEV-."
+            FAIL=1
+          fi
+
+          # Bat ky SigningKey hard-code nao khac trong source deu bi flag
+          # (trừ file Development da kiem tra o tren).
+          if grep -rIn --exclude-dir=node_modules --exclude-dir=.git \
+               --exclude=appsettings.Development.json \
+               -E 'SigningKey"?\s*[:=]\s*"[A-Za-z0-9+/=_-]{32,}' erp-fmcg-backend-csharp/src 2>/dev/null; then
+            echo "[FAIL] tim thay JWT signing key hard-coded trong source."
+            FAIL=1
+          fi
+
+          if [ "$FAIL" != "0" ]; then exit 1; fi
+          echo "[PASS] khong phat hien secret bi commit."

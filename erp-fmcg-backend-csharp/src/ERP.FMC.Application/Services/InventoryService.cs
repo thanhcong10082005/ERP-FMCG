@@ -1,4 +1,4 @@
-using AutoMapper;
+using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.DTOs;
 using ERP.FMC.Application.Interfaces;
 using ERP.FMC.Domain.Interfaces;
@@ -8,11 +8,10 @@ namespace ERP.FMC.Application.Services;
 public class InventoryService : IInventoryService
 {
     private readonly IUnitOfWork _uow;
-    private readonly IMapper _mapper;
 
-    public InventoryService(IUnitOfWork uow, IMapper mapper)
+    public InventoryService(IUnitOfWork uow)
     {
-        _uow = uow; _mapper = mapper;
+        _uow = uow;
     }
 
     public async Task<IReadOnlyList<InventoryBalanceDto>> GetBalancesAsync(Guid? warehouseId, Guid? productId, CancellationToken ct = default)
@@ -80,17 +79,16 @@ public class InventoryService : IInventoryService
 public class PriceListService : IPriceListService
 {
     private readonly IUnitOfWork _uow;
-    private readonly IMapper _mapper;
 
-    public PriceListService(IUnitOfWork uow, IMapper mapper)
+    public PriceListService(IUnitOfWork uow)
     {
-        _uow = uow; _mapper = mapper;
+        _uow = uow;
     }
 
     public async Task<IReadOnlyList<PriceListDto>> GetAllAsync(CancellationToken ct = default)
     {
         var items = await _uow.PriceLists.GetAllAsync();
-        return _mapper.Map<IReadOnlyList<PriceListDto>>(items.OrderBy(p => p.PriceListCode));
+        return items.OrderBy(p => p.PriceListCode).Select(x => x.ToDto()).ToList();
     }
 
     public async Task<PriceListDto?> GetByProductAsync(Guid productId, CancellationToken ct = default)
@@ -100,16 +98,16 @@ public class PriceListService : IPriceListService
             p.ProductId == productId && p.IsActive &&
             p.EffectiveFrom <= today && (p.EffectiveTo == null || p.EffectiveTo >= today));
         var price = prices.OrderByDescending(p => p.Priority).FirstOrDefault();
-        return price == null ? null : _mapper.Map<PriceListDto>(price);
+        return price == null ? null : price.ToDto();
     }
 
     public async Task<PriceListDto> CreateAsync(PriceListDto dto, CancellationToken ct = default)
     {
-        var p = _mapper.Map<Domain.Entities.PriceList>(dto);
+        var p = dto.ToEntity();
         p.Id = Guid.NewGuid();
         await _uow.PriceLists.AddAsync(p);
         await _uow.SaveChangesAsync();
-        return _mapper.Map<PriceListDto>(p);
+        return p.ToDto();
     }
 
     public async Task<PriceListDto?> UpdateAsync(Guid id, PriceListDto dto, CancellationToken ct = default)
@@ -123,7 +121,7 @@ public class PriceListService : IPriceListService
         p.IsActive = dto.IsActive;
         await _uow.PriceLists.UpdateAsync(p);
         await _uow.SaveChangesAsync();
-        return _mapper.Map<PriceListDto>(p);
+        return p.ToDto();
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)

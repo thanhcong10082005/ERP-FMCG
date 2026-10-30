@@ -1,4 +1,4 @@
-using AutoMapper;
+using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.DTOs;
 using ERP.FMC.Application.Interfaces;
 using ERP.FMC.Domain.Entities;
@@ -11,12 +11,11 @@ namespace ERP.FMC.Application.Services;
 public class SalesOrderService : ISalesOrderService
 {
     private readonly IUnitOfWork _uow;
-    private readonly IMapper _mapper;
     private readonly ILogger<SalesOrderService> _logger;
 
-    public SalesOrderService(IUnitOfWork uow, IMapper mapper, ILogger<SalesOrderService> logger)
+    public SalesOrderService(IUnitOfWork uow, ILogger<SalesOrderService> logger)
     {
-        _uow = uow; _mapper = mapper; _logger = logger;
+        _uow = uow; _logger = logger;
     }
 
     public async Task<PagedResult<SalesOrderDto>> GetPagedAsync(SalesOrderFilterDto filter, CancellationToken ct = default)
@@ -49,7 +48,7 @@ public class SalesOrderService : ISalesOrderService
 
         return new PagedResult<SalesOrderDto>
         {
-            Items = _mapper.Map<IReadOnlyList<SalesOrderDto>>(items),
+            Items = items.Select(x => x.ToDto()).ToList(),
             TotalCount = total,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -62,8 +61,8 @@ public class SalesOrderService : ISalesOrderService
         if (order == null) return null;
 
         var items = await _uow.SalesOrderItems.FindAsync(i => i.SalesOrderId == id);
-        var dto = _mapper.Map<SalesOrderDto>(order);
-        dto.Items = _mapper.Map<List<SalesOrderItemDto>>(items.OrderBy(i => i.LineNumber));
+        var dto = order.ToDto();
+        dto.Items = items.OrderBy(i => i.LineNumber).Select(x => x.ToDto()).ToList();
         return dto;
     }
 
@@ -171,7 +170,7 @@ public class SalesOrderService : ISalesOrderService
 
         await _uow.SalesOrders.UpdateAsync(order);
         await _uow.SaveChangesAsync();
-        return _mapper.Map<SalesOrderDto>(order);
+        return order.ToDto();
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)

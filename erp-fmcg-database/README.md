@@ -13,11 +13,23 @@ Pack/erp-fmcg-database/
 ├── 01_schema.sql                   # ★ DDL tổng hợp (UTF-8 KHÔNG BOM)
 ├── 02_verify.sql                   # ★ Báo cáo kiểm tra dữ liệu (read-only)
 ├── requirements.txt                # Dependency Python
+├── database/
+│   ├── 01_schema/                  # ★ File DDL nguồn (00..07)
+│   └── 02_migration/               # ★ Migration Phase 5/6 (07..10)
 ├── scripts/
 │   ├── 01_full_import_pipeline.py  # ★ Pipeline nhập dữ liệu duy nhất
 │   ├── 02_verify_data.py           # Đối soát + xuất báo cáo (CSV/JSON)
 │   ├── 03_clean_db.ps1             # Reset dữ liệu nghiệp vụ (giữ master data)
-│   └── build_schema.py             # Sinh lại 01_schema.sql từ file nguồn
+│   ├── 03_import_partner_debt.py   # Nhập công nợ khách hàng (Phase 5)
+│   ├── 04_verify_pod_idempotency.py# Kiểm tra idempotency POD (Phase 5)
+│   ├── 05_apply_phase6_migration.py# Áp dụng migration Phase 6
+│   ├── 06_seed_opening_stock.py    # Tạo opening balance stock ledger
+│   ├── 07_unified_verify.py        # ★ Verify thống nhất 54 check (Phase 6)
+│   ├── 08_data_regression.py       # ★ Hash regression dữ liệu (Phase 6)
+│   ├── 09_backup_db.ps1            # ★ Backup tự động + verify (Phase 6)
+│   ├── verify_registry.py          # ★ Nguồn sự thật 54 check
+│   ├── build_schema.py             # Sinh lại 01_schema.sql từ file nguồn
+│   └── build_verify_sql.py         # Sinh lại 02_verify.sql từ registry
 └── migration_data/
     └── README.md                   # Mô tả 11 file CSV + quy tắc làm sạch
 ```
@@ -178,3 +190,63 @@ Dry-run mất **~40 giây** cho 177.631 dòng và cho kết quả **giống hệ
 
 ---
 
+---
+
+## 7. Phase 6 — Migration, Verify & Backup
+
+### 7.1. Migration Phase 5 / Phase 6
+
+| File                                        | Nội dung                                                     |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `database/02_migration/07_phase5_migration.sql` | 4 bảng delivery, `client_pod_id` UNIQUE, GPS, công nợ     |
+| `database/02_migration/08_phase5c_user_phone.sql` | Thêm `phone` cho `user_accounts`                        |
+| `database/02_migration/09_phase6_dispatcher_eod.sql` | Bảng dispatcher, EOD reconciliation, index báo cáo |
+| `database/02_migration/10_phase6_stock_trigger_fix.sql` | Sửa trigger stock ledger + CHECK `average_cost >= 0` |
+
+Áp dụng lên DB đang chạy:
+
+```powershell
+python scripts\05_apply_phase6_migration.py --server ".\SQLEXPRESS" --database "ERP_FMCG"
+```
+
+Tạo opening balance tồn kho (nếu tồn kho âm do lịch sử import):
+
+```powershell
+python scripts\06_seed_opening_stock.py
+```
+
+### 7.2. Verify thống nhất (54 check)
+
+`verify_registry.py` là **nguồn sự thật** duy nhất. Từ đó sinh ra:
+
+- `07_unified_verify.py` — runner Python, in PASS/FAIL từng check
+- `02_verify.sql` — bản SQL cho `sqlcmd` (sinh bằng `build_verify_sql.py`)
+
+```powershell
+python scripts\07_unified_verify.py
+python scripts\build_verify_sql.py      # sinh lại 02_verify.sql
+```
+
+Nhóm check: **A** (import), **D** (Phase 5 delivery), **P6** (anti-fraud / stock / EOD / hardening).
+
+### 7.3. Regression dữ liệu (hash)
+
+```powershell
+python scripts\08_data_regression.py            # tạo baseline
+python scripts\08_data_regression.py --check    # so với baseline
+```
+
+Tính SHA-256 theo chunk cho `sales_orders`, `sales_order_items`, `partners`,
+`products`, `stock_ledger`, `inventory_balances`, `delivery_pods` — phát hiện hồi quy
+khi ai đó sửa dữ liệu ngoài ý muốn.
+
+### 7.4. Backup tự động
+
+```powershell
+powershell scripts\09_backup_db.ps1
+```
+
+- Tự phát hiện SQL Server Express (bỏ `WITH COMPRESS` vì Express không hỗ trợ)
+- `RESTORE HEADERONLY` để xác nhận file backup đọc được
+- Xoay vòng theo `-RetentionDays` (mặc định 14 ngày)
+- Trả exit code khác 0 nếu backup lỗi (dùng cho CI/cron)

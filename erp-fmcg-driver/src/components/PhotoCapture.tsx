@@ -3,6 +3,7 @@
 // ============================================================
 
 import React, { useRef, useState } from 'react';
+import { resizeImage } from '../utils/imageResize';
 
 interface Props {
   onCapture: (dataUrl: string) => void;
@@ -17,18 +18,34 @@ export const PhotoCapture: React.FC<Props> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    setBusy(true);
+    try {
+      const reader = new FileReader();
+      const raw = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Không đọc được file ảnh'));
+        reader.readAsDataURL(file);
+      });
+
+      // resize + nén trước khi upload.
+      //   Ảnh camera 2–5 MB -> base64 ~2,7–6,7 MB -> POST chậm, timeout,
+      //   tài xế bấm lại => sinh POD trùng.
+      const dataUrl = await resizeImage(raw, 1000, 0.7);
       setPreview(dataUrl);
       onCapture(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('[PhotoCapture] xử lý ảnh thất bại:', err);
+    } finally {
+      setBusy(false);
+      // Cho phép chọn lại cùng một file
+      if (inputRef.current) inputRef.current.value = '';
+    }
   };
 
   return (
@@ -61,11 +78,12 @@ export const PhotoCapture: React.FC<Props> = ({
       ) : (
         <button
           type="button"
-          className="w-full h-48 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-2 text-text-secondary hover:border-primary hover:text-primary transition-colors"
+          disabled={busy}
+          className="w-full h-48 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-2 text-text-secondary hover:border-primary hover:text-primary transition-colors disabled:opacity-60"
           onClick={() => inputRef.current?.click()}
         >
           <CameraIcon />
-          <span className="text-sm font-medium">{label}</span>
+          <span className="text-sm font-medium">{busy ? 'Đang xử lý...' : label}</span>
           <span className="text-xs">Tap to capture</span>
         </button>
       )}

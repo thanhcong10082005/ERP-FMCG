@@ -8,16 +8,20 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 /**
  * URL backend, ví dụ:
- *   http://localhost:3001
- *   http://localhost:3001/api
+ *   http://localhost:5000        ← Backend C# (.NET 8) trong Pack
+ *   http://localhost:5000/api
  *   https://erp-fmcg-backend.onrender.com/api
  *
- * Driver App dùng các API chuyên biệt (/api/auth/dev-login, /api/sales/trips,
- * /api/sales/pod) do backend NestJS cung cấp. Backend C# trong pack này
- * chưa implement các route đó.
+ * backend trong Pack/erp-fmcg-backend-csharp (ASP.NET Core
+ *   .NET 8) cung cấp đầy đủ các route app cần:
+ *   /api/auth/dev-login, /api/sales/trips, /api/sales/pod,
+ *   /api/driver/master/partners, /api/driver/master/products.
+ *
+ *   Trước đây default là http://localhost:3001 (NestJS cũ đã bị loại khỏi
+ *   Pack) => mọi request fail khi chạy đúng stack trong Pack.
  */
 const RAW_BASE_URL: string =
-  import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 /**
  * Chuẩn hoá base URL: bỏ dấu "/" ở cuối và bỏ hậu tố "/api" (nếu có).

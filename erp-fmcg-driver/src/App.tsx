@@ -17,6 +17,7 @@ import { PartialDeliveryScreen } from './screens/PartialDeliveryScreen';
 import { FailDeliveryScreen } from './screens/FailDeliveryScreen';
 import { PaymentScreen } from './screens/PaymentScreen';
 import { EODScreen } from './screens/EODScreen';
+import { PwaStatusBanner } from './components/PwaStatusBanner';
 import './index.css';
 
 // ── Auth Guard ──────────────────────────────────────────────
@@ -67,6 +68,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* ★ PHASE 6C.7 — banner trạng thái PWA (update / offline / cài app) */}
+      <PwaStatusBanner />
       <Routes>
         {/* Public */}
         <Route path="/login" element={<LoginScreen />} />

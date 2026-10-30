@@ -102,13 +102,13 @@ public class ImportStagingService
 
         try
         {
-            var extension = Path.GetExtension(job.FilePath).ToLower();
+            var extension = Path.GetExtension(job.FilePath ?? string.Empty).ToLower();
             Dictionary<int, Dictionary<string, string?>> rows;
 
             if (extension == ".csv")
-                rows = await ParseCsvAsync(job.FilePath, ct);
+                rows = await ParseCsvAsync(job.FilePath!, ct);
             else if (extension == ".xlsx" || extension == ".xls")
-                rows = await ParseExcelAsync(job.FilePath, ct);
+                rows = await ParseExcelAsync(job.FilePath!, ct);
             else
                 throw new NotSupportedException($"File format '{extension}' not supported. Use CSV or XLSX.");
 
@@ -304,7 +304,10 @@ public class ImportStagingService
             .ToList();
 
         var errors = (await _uow.ImportErrors.FindAsync(e => e.JobId == jobId))
-            .GroupBy(e => e.StagingId)
+            // StagingId có thể NULL (lỗi không gắn được dòng staging).
+            // Bỏ các dòng lỗi không gắn staging để key của dictionary luôn non-null.
+            .Where(e => e.StagingId.HasValue)
+            .GroupBy(e => e.StagingId!.Value)
             .ToDictionary(g => g.Key, g => g.ToList());
 
         return rows.Select(r => new ImportStagingPreviewDto

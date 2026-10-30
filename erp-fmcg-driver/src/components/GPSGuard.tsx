@@ -31,6 +31,14 @@ export const GPSGuard: React.FC<Props> = ({
   const [distance, setDistance] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // chỉ được bypass khi KHÁCH KHÔNG CÓ tọa độ.
+  //   Trước đây nút "Bỏ qua GPS Gate" luôn hiện -> tài xế bấm 1 cái là
+  //   bypass hoàn toàn cơ chế chống gian lận vị trí.
+  const partnerHasGps =
+    partnerLat != null && partnerLon != null &&
+    Number.isFinite(partnerLat) && Number.isFinite(partnerLon);
+  const canSkip = !partnerHasGps && !!onSkip;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -78,13 +86,13 @@ export const GPSGuard: React.FC<Props> = ({
           <p className="text-xs text-text-secondary mt-2">
             Đảm bảo GPS đã bật và cho phép truy cập vị trí
           </p>
-          {onSkip && (
+          {canSkip && (
             <button
               type="button"
               className="btn btn-ghost w-full mt-4"
               onClick={onSkip}
             >
-              Bỏ qua GPS Gate
+              Khách chưa có tọa độ — cho phép giao
             </button>
           )}
         </div>
@@ -139,9 +147,9 @@ export const GPSGuard: React.FC<Props> = ({
           >
             Kiểm tra lại GPS
           </button>
-          {onSkip && (
+          {canSkip && (
             <button type="button" className="btn btn-ghost w-full" onClick={onSkip}>
-              Bỏ qua GPS Gate
+              Khách chưa có tọa độ — cho phép giao
             </button>
           )}
         </div>

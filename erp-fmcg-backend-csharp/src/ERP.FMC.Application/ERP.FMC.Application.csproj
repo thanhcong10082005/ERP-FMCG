@@ -9,16 +9,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="12.0.1" />
-    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
+    <!-- ★ PHASE 6C: ĐÃ GỠ AutoMapper hoàn toàn.
+         AutoMapper 12.0.1 có lỗ hổng DoS (GHSA-rvv3-g6hj-g44x); bản vá
+         (>= 15.1.1) yêu cầu license thương mại ⇒ không phù hợp.
+         Thay bằng mapping thủ công trong `Mappings/EntityMapper.cs`. -->
     <PackageReference Include="FluentValidation" Version="11.5.2" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.5.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.1.2" />
+    <!-- ★ PHASE 6A.7: bump 5.1.2 -> 5.2.2
+         Vá lỗ hổng NU1903 (GHSA-98g6-xh36-x2p7). -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <!-- ★ 6A.2: cần DbUpdateException để bắt vi phạm UNIQUE constraint -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
     <PackageReference Include="Dapper" Version="2.1.24" />
+    <!-- sinh & xác thực JWT -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>

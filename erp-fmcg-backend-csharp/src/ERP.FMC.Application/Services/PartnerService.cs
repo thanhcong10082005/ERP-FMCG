@@ -1,4 +1,4 @@
-using AutoMapper;
+using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.DTOs;
 using ERP.FMC.Application.Interfaces;
 using ERP.FMC.Domain.Entities;
@@ -11,13 +11,11 @@ namespace ERP.FMC.Application.Services;
 public class PartnerService : IPartnerService
 {
     private readonly IUnitOfWork _uow;
-    private readonly IMapper _mapper;
     private readonly ILogger<PartnerService> _logger;
 
-    public PartnerService(IUnitOfWork uow, IMapper mapper, ILogger<PartnerService> logger)
+    public PartnerService(IUnitOfWork uow, ILogger<PartnerService> logger)
     {
         _uow = uow;
-        _mapper = mapper;
         _logger = logger;
     }
 
@@ -34,7 +32,7 @@ public class PartnerService : IPartnerService
 
         return new PagedResult<PartnerDto>
         {
-            Items = _mapper.Map<IReadOnlyList<PartnerDto>>(items),
+            Items = items.Select(x => x.ToDto()).ToList(),
             TotalCount = total,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -44,13 +42,13 @@ public class PartnerService : IPartnerService
     public async Task<PartnerDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var partner = await _uow.Partners.GetByIdAsync(id);
-        return partner == null ? null : _mapper.Map<PartnerDto>(partner);
+        return partner == null ? null : partner.ToDto();
     }
 
     public async Task<PartnerDto?> GetByCodeAsync(string code, CancellationToken ct = default)
     {
         var partner = await _uow.Partners.FirstOrDefaultAsync(p => p.PartnerCode == code);
-        return partner == null ? null : _mapper.Map<PartnerDto>(partner);
+        return partner == null ? null : partner.ToDto();
     }
 
     public async Task<PartnerDto> CreateAsync(CreatePartnerDto dto, CancellationToken ct = default)
@@ -58,14 +56,14 @@ public class PartnerService : IPartnerService
         if (await _uow.Partners.ExistsAsync(p => p.PartnerCode == dto.PartnerCode))
             throw new InvalidOperationException($"Partner code '{dto.PartnerCode}' already exists");
 
-        var partner = _mapper.Map<Partner>(dto);
+        var partner = dto.ToEntity();
         partner.Id = Guid.NewGuid();
 
         await _uow.Partners.AddAsync(partner);
         await _uow.SaveChangesAsync();
         _logger.LogInformation("Created partner {Code} - {Name}", partner.PartnerCode, partner.PartnerName);
 
-        return _mapper.Map<PartnerDto>(partner);
+        return partner.ToDto();
     }
 
     public async Task<PartnerDto?> UpdateAsync(Guid id, UpdatePartnerDto dto, CancellationToken ct = default)
@@ -86,7 +84,7 @@ public class PartnerService : IPartnerService
         await _uow.SaveChangesAsync();
         _logger.LogInformation("Updated partner {Id}", id);
 
-        return _mapper.Map<PartnerDto>(partner);
+        return partner.ToDto();
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)

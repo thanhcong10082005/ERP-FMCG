@@ -1,12 +1,16 @@
 using ERP.FMC.Application.Interfaces;
 using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.Services;
+using ERP.FMC.Api.Middleware;
 using ERP.FMC.Domain.Interfaces;
 using ERP.FMC.Infrastructure.Data;
 using ERP.FMC.Infrastructure.Repositories;
 using ERP.FMC.Infrastructure.Services;
 using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,8 +29,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, b =>
         b.EnableRetryOnFailure(maxRetryCount: 3)));
 
-// AutoMapper
-builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
+// ★ PHASE 6C: đã gỡ AutoMapper — mapping thủ công trong Mappings/EntityMapper.cs
 
 // DI - Repositories + UoW
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -47,21 +50,80 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 // DI - Infrastructure Services
 builder.Services.AddScoped<BulkOperationService>();
 builder.Services.AddScoped<ERP.FMC.Infrastructure.Services.ExportService>();
+// ★ PHASE 6B.5 — xuất Excel cho 6 báo cáo vận hành + POD + EOD
+builder.Services.AddScoped<ERP.FMC.Infrastructure.Services.Phase6ExportService>();
 builder.Services.AddScoped<ImportStagingService>();
 builder.Services.AddScoped<TemporalHistoryService>();
 builder.Services.AddSingleton<ValidationEngine>();
 
-// DI - Phase 5 Services
+// DI - Services
 builder.Services.AddScoped<IUatTestService, UatTestService>();
 builder.Services.AddScoped<ISmokeTestService, SmokeTestService>();
 builder.Services.AddScoped<IGoLiveService, GoLiveService>();
 builder.Services.AddScoped<IMonitoringService, MonitoringService>();
 
+// DI - JWT + Auth
+var jwtOptions = new JwtOptions();
+builder.Configuration.GetSection(JwtOptions.SectionName).Bind(jwtOptions);
+// Ưu tiên biến môi trường (không commit secret vào repo)
+if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ERP_FMCG_JWT_KEY")))
+    jwtOptions.SigningKey = Environment.GetEnvironmentVariable("ERP_FMCG_JWT_KEY")!;
+builder.Services.AddSingleton(jwtOptions);
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// DI - nghiệp vụ giao hàng
+builder.Services.AddScoped<IDeliveryTripService, DeliveryTripService>();
+builder.Services.AddScoped<IDeliveryPodService, DeliveryPodService>();
+
+// ★ PHASE 6A.1 — chống gian lận server-side (3 chốt chặn)
+builder.Services.AddScoped<IAntiFraudService, AntiFraudService>();
+
+// ★ PHASE 6B — dispatcher, báo cáo, đối soát EOD
+builder.Services.AddScoped<IDispatcherService, DispatcherService>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IEodReconciliationService, EodReconciliationService>();
+
 // DI - HttpClient for smoke tests
 builder.Services.AddHttpClient();
 
+// ============== JWT Authentication ==============
+// Driver App gọi API cần Bearer token.
+//   Token ký HS256, hạn 12h (mặc định) cho 1 ca giao hàng.
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(ResolveJwtKey(jwtOptions))),
+            ClockSkew = TimeSpan.FromMinutes(1),
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Jwt");
+                logger.LogWarning("JWT xac thuc that bai: {Error}",
+                    context.Exception.Message);
+                return Task.CompletedTask;
+            },
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 // Validators
-builder.Services.AddValidatorsFromAssemblyContaining<MappingProfile>();
+builder.Services.AddValidatorsFromAssemblyContaining<ERP.FMC.Application.DTOs.PartnerDto>();
 
 // MVC + JSON
 builder.Services.AddControllers()
@@ -84,10 +146,89 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// ★ PHASE 6C.4 — RATE LIMITING
+//   Chống tài xế spam POD (gửi hàng loạt để bơm nợ / gian lận).
+//   - POST /api/sales/pod: 30 lần / phút / tài xế (IP fallback)
+//   - POST /api/sales/trips/*: 10 lần / phút
+//   - Global: 300 lần / phút / IP cho tất cả API
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<
+        HttpContext, string>(ctx =>
+        {
+            var key = GetRateLimitKey(ctx);
+            return System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                key,
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 300,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                });
+        });
+
+    options.AddPolicy("pod-submit", httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            GetRateLimitKey(httpContext),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+
+    options.AddPolicy("trip-mutate", httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            GetRateLimitKey(httpContext),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"error\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"Quá nhiều yêu cầu. Vui lòng thử lại sau.\"}",
+            token);
+    };
+});
+
 // CORS
+// ★ PHASE 6C.5 — siết CORS.
+//   Trước: AllowAnyOrigin() → mọi website đều gọi được API.
+//   Sau: chỉ cho phép origin trong cấu hình `Cors:AllowedOrigins`.
+//   Nếu danh sách rỗng → chỉ cho phép localhost (an toàn mặc định).
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                     ?? Array.Empty<string>();
+
+if (allowedOrigins.Length == 0)
+{
+    allowedOrigins = new[]
+    {
+        "http://localhost:5173",
+        "http://localhost:5000",
+        "http://localhost:5001",
+        "http://127.0.0.1:5173",
+    };
+}
+
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+    {
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .SetPreflightMaxAge(TimeSpan.FromSeconds(60));
+    }));
 
 // Logging
 builder.Services.AddLogging(b => b.AddConsole());
@@ -127,8 +268,71 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+//  Middleware thứ tự RẤT QUAN TRỌNG
+//   1. ExceptionMiddleware  — bắt lỗi toàn cục, trả JSON chuẩn
+//   2. AuditLogMiddleware    — ghi audit cho write operations
+//   3. CORS
+//   4. Authentication       — xác thực JWT
+//   5. Authorization
+//
+// Lưu ý: AuditLogMiddleware phải đặt SAU ExceptionMiddleware để lỗi
+// không làm hỏng luồng audit, và TRƯỚC Authentication để có context.
+app.UseMiddleware<ExceptionMiddleware>();
+app.UseMiddleware<AuditLogMiddleware>();
 app.UseCors();
+// ★ PHASE 6C.4 — rate limiting phải SAU CORS, TRƯỚC auth để key theo user.
+app.UseRateLimiter();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// ===================================================================
+// Helpers
+// ===================================================================
+
+/// <summary>
+/// Lấy khoá phân vùng rate limit.
+/// ★ 6C.4: ưu tiên theo user (tài xế) để 1 tài xế không bị chặn nhầm
+///   khi nhiều tài xế dùng chung NAT/IP trong một khu vực.
+///   Fallback theo IP cho request chưa xác thực.
+/// </summary>
+static string GetRateLimitKey(HttpContext ctx)
+{
+    var userId = ctx.User?.FindFirst("sub")?.Value
+                 ?? ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                 ?? ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+
+    if (!string.IsNullOrWhiteSpace(userId))
+        return $"user:{userId}";
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    return $"ip:{ip}";
+}
+
+/// <summary>
+/// Lấy khoá ký JWT. Nếu chưa cấu hình -> dùng khoá Development tạm
+/// (đủ để API chạy được local) và in cảnh báo rõ ràng.
+/// </summary>
+static string ResolveJwtKey(JwtOptions options)
+{
+    var key = options.SigningKey;
+    if (string.IsNullOrWhiteSpace(key))
+        key = Environment.GetEnvironmentVariable("ERP_FMCG_JWT_KEY");
+
+    if (string.IsNullOrWhiteSpace(key))
+    {
+        key = "DEV-ONLY-INSECURE-KEY-CHANG-DOI-KEY-NAY-TRUOC-KHI-LEN-PROD-0123456789";
+        Console.WriteLine(
+            "[WARN] JWT:SigningKey chua duoc cau hinh — dang dung khoa DEV tam. " +
+            "Production BAT BUOC dat appsettings.Local.json hoac bien moi truong ERP_FMCG_JWT_KEY.");
+    }
+
+    // HS256 yeu cau >= 32 byte
+    if (Encoding.UTF8.GetByteCount(key) < 32)
+        key = key.PadRight(32, '0');
+
+    return key;
+}

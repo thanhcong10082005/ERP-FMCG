@@ -30,7 +30,7 @@ Web API cho hệ thống ERP FMCG, kiến trúc 4 lớp (Domain → Application 
 | `ERP.FMC.Application`    | DTO, service nghiệp vụ, AutoMapper profile, validator                     |
 | `ERP.FMC.Infrastructure` | EF Core `AppDbContext`, repository, service hạ tầng (import/export/audit) |
 | `ERP.FMC.Api`            | Controller, DI container, cấu hình Kestrel + Swagger                      |
-| `ERP.FMC.Tests`          | Unit test (xUnit + Moq) — 12 test                                         |
+| `ERP.FMC.Tests`          | Unit test (xUnit + Moq) — 44 test                                         |
 
 
 ---
@@ -122,7 +122,7 @@ dotnet run --project src/ERP.FMC.Api
 dotnet test tests/ERP.FMC.Tests
 ```
 
-Kỳ vọng: `Failed: 0, Passed: 12`.
+Kỳ vọng: `Failed: 0, Passed: 44`.
 
 ---
 
@@ -150,6 +150,42 @@ Kỳ vọng: `Failed: 0, Passed: 12`.
 
 
 Danh sách đầy đủ (kèm schema request/response): mở `http://localhost:5000/swagger`.
+---
+
+## 6.1. Nhóm endpoint Phase 5 (giao hàng)
+
+| Nhóm        | Tiền tố       | Mô tả                                          |
+| ----------- | ------------- | ---------------------------------------------- |
+| Auth        | `/api/auth`   | `dev-login` sinh JWT cho tài xế                 |
+| Trips       | `/api/sales`  | trips / trips/{id} / start / complete           |
+| POD         | `/api/sales`  | `POST /api/sales/pod` (idempotent)              |
+| Master data | `/api/master` | products, partners cho app offline              |
+
+---
+
+## 6.2. Nhóm endpoint Phase 6
+
+| Nhóm             | Tiền tố               | Mô tả                                                          |
+| ---------------- | --------------------- | -------------------------------------------------------------- |
+| Dispatcher       | `/api/dispatcher`     | Tạo chuyến, gán đơn, xem trip đầy đủ, đối soát EOD           |
+| Reports          | `/api/reports`        | Doanh thu, tỉ lệ giao thành công, aging công nợ, hàng trả về…   |
+| Exports (Excel)  | `/api/exports/phase6` | Xuất 8 loại báo cáo vận hành ra `.xlsx` (ClosedXML)             |
+| Health check sâu | `/api/health/deep`    | Kiểm tra DB, bảng delivery, stock ledger, EOD                   |
+| Rate limiting    | `/api/sales/pod`      | 30 lần/phút / tài xế cho POD (chống spam)                      |
+
+### Chốt chặn anti-fraud (6A.1)
+
+`POST /api/sales/pod` **tự kiểm tra lại** dữ liệu client gửi lên:
+
+| Chốt        | Quy tắc                                     | Mã lỗi                   |
+| ----------- | ------------------------------------------- | ------------------------ |
+| Time-lock   | Giờ VN trong 05:00-22:00                    | `OUT_OF_DELIVERY_WINDOW` |
+| GPS Gate    | Cách khách <= 100 m (Haversine)             | `GPS_GATE_FAILED`        |
+| No Backdate | Lệch `gps_captured_at` với server > 15 phút | `TIMESTAMP_OUT_OF_RANGE` |
+
+`POST /api/sales/pod` có **idempotency** nhờ `client_pod_id` UNIQUE — gửi lại
+cùng POD trả `200` với POD cũ (`created: false`), không tạo bản ghi trùng.
+
 
 ---
 
@@ -187,7 +223,7 @@ erp-fmcg-backend-csharp/
 │   ├── ERP.FMC.Infrastructure/  # EF Core, repository, service hạ tầng
 │   └── ERP.FMC.Api/             # Controller, Program.cs, appsettings.json
 └── tests/
-    └── ERP.FMC.Tests/           # 12 unit test
+    └── ERP.FMC.Tests/           # 44 unit test
 ```
 
 ---
@@ -196,14 +232,23 @@ erp-fmcg-backend-csharp/
 
 ## 9. Kết nối Driver App
 
-
 | Ứng dụng          | Giá trị                              |
 | ----------------- | ------------------------------------ |
 | Backend API       | `http://localhost:5000`              |
 | Driver App `.env` | `VITE_API_URL=http://localhost:5000` |
 
+> ✅ Driver App trong pack này đã **có đủ route** `/api/auth/dev-login`,
+> `/api/sales/trips`, `/api/sales/pod` — được implement trong `ERP.FMC.Api`
+> (Phase 5B). Driver App dùng chung backend C#, không còn phụ thuộc
+> backend NestJS cũ.
 
-> ℹ️ Driver App trong pack này gọi nhóm API `/api/auth/dev-login`,
-> `/api/sales/trips`, `/api/sales/pod` — các route này **chưa có** trong backend
-> C# (chúng thuộc backend NestJS cũ).
+---
 
+## 10. Kiểm thử Phase 6
+
+| Bộ kiểm thử                        | Lệnh                                         | Kết quả    |
+| ----------------------------------- | -------------------------------------------- | ---------- |
+| Unit test backend (.NET 8)         | `dotnet test tests/ERP.FMC.Tests`            | 44/44 PASS |
+| Verify dữ liệu (54 check)          | `python ../erp-fmcg-database/scripts/07_unified_verify.py` | 52 PASS + 2 INFO |
+| Regression hash (dữ liệu)           | `python ../erp-fmcg-database/scripts/08_data_regression.py --check` | PASS |
+| Backup tự động                     | `powershell ../erp-fmcg-database/scripts/09_backup_db.ps1` | PASS |

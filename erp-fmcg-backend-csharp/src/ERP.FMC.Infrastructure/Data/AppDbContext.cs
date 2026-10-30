@@ -29,6 +29,17 @@ public class AppDbContext : DbContext
     public DbSet<ImportFieldMapping> ImportFieldMappings => Set<ImportFieldMapping>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    // nghiệp vụ giao hàng
+    public DbSet<DeliveryTrip> DeliveryTrips => Set<DeliveryTrip>();
+    public DbSet<DeliveryTripOrder> DeliveryTripOrders => Set<DeliveryTripOrder>();
+    public DbSet<DeliveryPod> DeliveryPods => Set<DeliveryPod>();
+    public DbSet<PodItem> PodItems => Set<PodItem>();
+    public DbSet<PodAttachment> PodAttachments => Set<PodAttachment>();
+
+    // ★ PHASE 6B.4 — đối soát cuối ngày (EOD)
+    public DbSet<EodReconciliation> EodReconciliations => Set<EodReconciliation>();
+    public DbSet<EodReconciliationItem> EodReconciliationItems => Set<EodReconciliationItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

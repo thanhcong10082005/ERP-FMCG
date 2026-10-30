@@ -29,6 +29,12 @@ public class InventoryBalance : BaseEntity
 
     public decimal? Available { get; set; }
 
+    /// <summary>
+    /// COMPUTED PERSISTED trong SQL Server
+    ///   (quantity_on_hand * average_cost) -> chỉ đọc, không ghi.
+    /// </summary>
+    public decimal TotalValue { get; set; }
+
     public decimal LastCost { get; set; } = 0;
 
     public DateTime? LastMovementAt { get; set; }

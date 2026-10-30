@@ -43,6 +43,11 @@ public class Partner : BaseEntity
     [MaxLength(100)]
     public string? Province { get; set; }
 
+    // tọa độ GPS (đã có sẵn trong schema, trước đây entity thiếu)
+    public decimal? Latitude { get; set; }
+
+    public decimal? Longitude { get; set; }
+
     [MaxLength(50)]
     public string? RouteCode { get; set; }
 
@@ -62,7 +67,29 @@ public class Partner : BaseEntity
 
     public decimal CreditLimit { get; set; } = 0;
 
+    /// <summary>
+    /// công nợ HIỆN TẠI chưa thu
+    ///   (đơn mới ghi nợ + công nợ cũ được chuyển sang).
+    /// </summary>
     public decimal CurrentDebt { get; set; } = 0;
+
+    /// <summary>
+    /// công nợ CŨ chưa thu.
+    ///   Nạp từ file gốc (480 khách trùng DB) và giảm dần khi tài xế thu được.
+    /// </summary>
+    public decimal OldDebt { get; set; } = 0;
+
+    public DateTime? OldDebtDate { get; set; }
+
+    // metadata geocoding
+    //   LOW / MEDIUM / HIGH = auto-geocoder; MANUAL = admin sửa tay
+    [MaxLength(10)]
+    public string? GeocodingConfidence { get; set; }
+
+    public DateTime? LastGeocodedAt { get; set; }
+
+    [MaxLength(500)]
+    public string? GeocodedAddress { get; set; }
 
     public bool IsActive { get; set; } = true;
 

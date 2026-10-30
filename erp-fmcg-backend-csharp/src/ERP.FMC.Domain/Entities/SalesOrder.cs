@@ -56,11 +56,29 @@ public class SalesOrder : BaseEntity
 
     public decimal PaidAmount { get; set; } = 0;
 
+    /// <summary>
+    /// snapshot công nợ cũ lúc tạo đơn.
+    ///   Driver App hiển thị "Công nợ cũ" cần thu cho khách này.
+    /// </summary>
+    public decimal OldDebtAmount { get; set; } = 0;
+
     [MaxLength(20)]
     public string Status { get; set; } = "CONFIRMED";
 
     [MaxLength(20)]
     public string PaymentStatus { get; set; } = "UNPAID";
+
+    /// <summary>
+    /// số lần giao hàng thất bại.
+    ///   >= 3 -> tự động CANCELLED (chuyển từ Postgres v13_1_3).
+    /// </summary>
+    public int FailureCount { get; set; } = 0;
+
+    /// <summary>
+    /// ★ DB-C11: DOOR_LOCKED | WRONG_ORDER | CUSTOMER_ABSENT | TRAFFIC | OTHER
+    /// </summary>
+    [MaxLength(50)]
+    public string? FailureReason { get; set; }
 
     [MaxLength(50)]
     public string? InvoiceNumber { get; set; }

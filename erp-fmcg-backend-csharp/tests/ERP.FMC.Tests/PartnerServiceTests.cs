@@ -4,7 +4,7 @@ using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.Services;
 using ERP.FMC.Domain.Entities;
 using ERP.FMC.Domain.Interfaces;
-using AutoMapper;
+
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
@@ -14,14 +14,12 @@ namespace ERP.FMC.Tests;
 public class PartnerServiceTests
 {
     private readonly Mock<IUnitOfWork> _uow = new();
-    private readonly IMapper _mapper;
     private readonly PartnerService _service;
 
     public PartnerServiceTests()
     {
-        var config = new MapperConfiguration(c => c.AddProfile<MappingProfile>());
-        _mapper = config.CreateMapper();
-        _service = new PartnerService(_uow.Object, _mapper, NullLogger<PartnerService>.Instance);
+        // ★ 6C: AutoMapper đã gỡ — dùng mapping thủ công (EntityMapper).
+        _service = new PartnerService(_uow.Object, NullLogger<PartnerService>.Instance);
     }
 
     [Fact]
@@ -79,14 +77,12 @@ public class PartnerServiceTests
 public class ProductServiceTests
 {
     private readonly Mock<IUnitOfWork> _uow = new();
-    private readonly IMapper _mapper;
     private readonly ProductService _service;
 
     public ProductServiceTests()
     {
-        var config = new MapperConfiguration(c => c.AddProfile<MappingProfile>());
-        _mapper = config.CreateMapper();
-        _service = new ProductService(_uow.Object, _mapper, NullLogger<ProductService>.Instance);
+        // ★ 6C: AutoMapper đã gỡ — dùng mapping thủ công (EntityMapper).
+        _service = new ProductService(_uow.Object, NullLogger<ProductService>.Instance);
     }
 
     [Fact]

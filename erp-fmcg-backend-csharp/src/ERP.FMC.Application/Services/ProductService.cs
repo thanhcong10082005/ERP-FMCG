@@ -1,4 +1,4 @@
-using AutoMapper;
+using ERP.FMC.Application.Mappings;
 using ERP.FMC.Application.DTOs;
 using ERP.FMC.Application.Interfaces;
 using ERP.FMC.Domain.Entities;
@@ -10,13 +10,11 @@ namespace ERP.FMC.Application.Services;
 public class ProductService : IProductService
 {
     private readonly IUnitOfWork _uow;
-    private readonly IMapper _mapper;
     private readonly ILogger<ProductService> _logger;
 
-    public ProductService(IUnitOfWork uow, IMapper mapper, ILogger<ProductService> logger)
+    public ProductService(IUnitOfWork uow, ILogger<ProductService> logger)
     {
         _uow = uow;
-        _mapper = mapper;
         _logger = logger;
     }
 
@@ -45,7 +43,7 @@ public class ProductService : IProductService
 
         return new PagedResult<ProductDto>
         {
-            Items = _mapper.Map<IReadOnlyList<ProductDto>>(items),
+            Items = items.Select(x => x.ToDto()).ToList(),
             TotalCount = total,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -55,13 +53,13 @@ public class ProductService : IProductService
     public async Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var product = await _uow.Products.GetByIdAsync(id);
-        return product == null ? null : _mapper.Map<ProductDto>(product);
+        return product == null ? null : product.ToDto();
     }
 
     public async Task<ProductDto?> GetBySkuAsync(string sku, CancellationToken ct = default)
     {
         var product = await _uow.Products.FirstOrDefaultAsync(p => p.Sku == sku);
-        return product == null ? null : _mapper.Map<ProductDto>(product);
+        return product == null ? null : product.ToDto();
     }
 
     public async Task<ProductDto> CreateAsync(CreateProductDto dto, CancellationToken ct = default)
@@ -69,14 +67,14 @@ public class ProductService : IProductService
         if (await _uow.Products.ExistsAsync(p => p.Sku == dto.Sku))
             throw new InvalidOperationException($"SKU '{dto.Sku}' already exists");
 
-        var product = _mapper.Map<Product>(dto);
+        var product = dto.ToEntity();
         product.Id = Guid.NewGuid();
 
         await _uow.Products.AddAsync(product);
         await _uow.SaveChangesAsync();
         _logger.LogInformation("Created product {Sku} - {Name}", product.Sku, product.ProductName);
 
-        return _mapper.Map<ProductDto>(product);
+        return product.ToDto();
     }
 
     public async Task<ProductDto?> UpdateAsync(Guid id, UpdateProductDto dto, CancellationToken ct = default)
@@ -94,7 +92,7 @@ public class ProductService : IProductService
 
         await _uow.Products.UpdateAsync(product);
         await _uow.SaveChangesAsync();
-        return _mapper.Map<ProductDto>(product);
+        return product.ToDto();
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)

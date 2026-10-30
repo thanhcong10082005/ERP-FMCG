@@ -3,6 +3,7 @@
 // ============================================================
 
 import React, { useRef, useState, useCallback } from 'react';
+import { resizeImage } from '../utils/imageResize';
 
 interface Props {
   onSave: (dataUrl: string) => void;
@@ -52,9 +53,12 @@ export const SignaturePad: React.FC<Props> = ({ onSave, onClear }) => {
     }
   }, [isDrawing]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canvasRef.current) return;
-    const dataUrl = canvasRef.current.toDataURL('image/png');
+    const raw = canvasRef.current.toDataURL('image/png');
+    // nén chữ ký trước khi upload (PNG 340x150 ~ 20-60KB
+    //   -> JPEG ~ 8-15KB). Giảm tải cho `AuditLogMiddleware` buffer body.
+    const dataUrl = await resizeImage(raw, 800, 0.7);
     onSave(dataUrl);
   };
 

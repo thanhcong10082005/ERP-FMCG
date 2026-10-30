@@ -14,6 +14,12 @@ dist-ssr/
 *.local
 .vite/
 
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
 # ===== Dữ liệu lớn — KHÔNG commit =====
 *.csv
 *.xlsx

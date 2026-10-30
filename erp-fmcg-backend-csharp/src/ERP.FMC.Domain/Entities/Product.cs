@@ -48,6 +48,9 @@ public class Product : BaseEntity
 
     public decimal MaxStock { get; set; } = 0;
 
+    /// <summary>ngưỡng cảnh báo tồn kho thấp.</summary>
+    public decimal ReorderPoint { get; set; } = 0;
+
     public bool IsActive { get; set; } = true;
 
     public DateTime SysStartTime { get; set; }

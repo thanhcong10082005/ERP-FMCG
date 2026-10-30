@@ -143,16 +143,20 @@ public class TemporalHistoryService
             throw new InvalidOperationException("Record not found at one of the time points");
 
         var changes = new Dictionary<string, FieldChange>();
-        var allKeys = ((IDictionary<string, object>)fromRow).Keys.Union(((IDictionary<string, object>)toRow).Keys);
+        // `dynamic` từ Dapper có thể null — ép kiểu an toàn qua biến kiểu rõ ràng.
+        var fromDict = fromRow as IDictionary<string, object>;
+        var toDict = toRow as IDictionary<string, object>;
+        if (fromDict is null || toDict is null)
+            throw new InvalidOperationException("Record not found at one of the time points");
+
+        var allKeys = fromDict.Keys.Union(toDict.Keys);
 
         foreach (var key in allKeys)
         {
             if (key.StartsWith("Sys")) continue;
 
-            var fromDict = (IDictionary<string, object>)fromRow;
-            var toDict = (IDictionary<string, object>)toRow;
-            var fromVal = fromDict.ContainsKey(key) ? fromDict[key] : null;
-            var toVal = toDict.ContainsKey(key) ? toDict[key] : null;
+            var fromVal = fromDict.TryGetValue(key, out var fv) ? fv : null;
+            var toVal = toDict.TryGetValue(key, out var tv) ? tv : null;
 
             if (!Equals(fromVal?.ToString(), toVal?.ToString()))
             {

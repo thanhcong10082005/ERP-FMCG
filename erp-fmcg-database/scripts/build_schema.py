@@ -5,12 +5,11 @@ Yêu cầu: UTF-8 KHÔNG BOM (SQL Server đọc BOM sẽ lỗi ﻿ ở dòng đ�
 
 Cấu hình (KHÔNG hardcode đường dẫn — T5):
   - ERP_FMCG_SCHEMA_SRC : thư mục chứa các file nguồn .sql
-                           (mặc định: tìm ngược lên từ pack root)
+                           (mặc định: <pack root>/database/01_schema)
   - ERP_FMCG_SCHEMA_OUT : file .sql đầu ra
                            (mặc định: <pack root>/01_schema.sql)
 
 Ví dụ:
-  set ERP_FMCG_SCHEMA_SRC=E:\\Work\\Database\\erp-fmcg-csharp\\database\\01_schema
   python scripts\\build_schema.py
 """
 import os
@@ -22,14 +21,15 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 PACK_ROOT = Path(__file__).resolve().parent.parent
 
 # Thu muc nguon: uu tien bien moi truong, sau do thu muc "database/01_schema"
-# nam cung cap voi pack root (vi du khi pack nam trong erp-fmcg-csharp).
+# nam trong pack root. Tu thoi diem Phase 5, schema nguon da nam hoan toan
+# trong Pack/ -> khong con phu thuoc thu muc ngoai.
 _env_src = os.environ.get("ERP_FMCG_SCHEMA_SRC")
 if _env_src:
     SRC = Path(_env_src).expanduser().resolve()
 else:
     _candidates = [
-        PACK_ROOT.parent / "erp-fmcg-csharp" / "database" / "01_schema",
         PACK_ROOT / "database" / "01_schema",
+        PACK_ROOT.parent / "erp-fmcg-csharp" / "database" / "01_schema",
         PACK_ROOT.parent / "database" / "01_schema",
     ]
     SRC = next((c for c in _candidates if c.is_dir()),
@@ -40,7 +40,10 @@ _env_out = os.environ.get("ERP_FMCG_SCHEMA_OUT")
 OUT = (Path(_env_out).expanduser().resolve() if _env_out
        else PACK_ROOT / "01_schema.sql")
 
-# Thu tu quan trong: DB/schema -> core -> business -> staging -> triggers -> temporal -> seed
+# Thu tu quan trong: DB/schema -> core -> business -> staging -> triggers
+# -> temporal -> delivery -> seed
+# ★ 07_delivery_tables.sql phai nam TRUOC 05_seed_data.sql vi seed co the
+#   tham chieu bang giao hang.
 PARTS = [
     "00_create_database.sql",
     "01_core_tables.sql",
@@ -48,6 +51,7 @@ PARTS = [
     "03_staging_tables.sql",
     "04_triggers.sql",
     "06_temporal_audit.sql",
+    "07_delivery_tables.sql",
     "05_seed_data.sql",
 ]
 
@@ -68,7 +72,8 @@ BANNER = """-- =================================================================
 --   4. 03_staging_tables.sql   - 4 bảng staging (import pipeline)
 --   5. 04_triggers.sql         - trigger tồn kho
 --   6. 06_temporal_audit.sql   - audit_logs + views
---   7. 05_seed_data.sql        - seed nền tảng
+--   7. 07_delivery_tables.sql  - 5 bảng nghiệp vụ giao hàng (Phase 5A.1)
+--   8. 05_seed_data.sql        - seed nền tảng
 -- ===================================================================
 
 """
@@ -95,6 +100,12 @@ def main() -> int:
         if raw.startswith(b"\xef\xbb\xbf"):
             raw = raw[3:]
         text = raw.decode("utf-8")
+        # ★ Chuẩn hoá EOL về LF.
+        #   Lý do: `.gitattributes` khai báo `*.sql text eol=lf`, nên file trong
+        #   repo luôn là LF. Nếu generator giữ nguyên CRLF của file nguồn trên
+        #   Windows, thì output sẽ KHÁC với bản commit trên Linux => CI job
+        #   `git diff --exit-code` fail oan.
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
         chunks.append(f"\n\n-- ===== {p} =====\n")
         chunks.append(text)
         print(f"  [OK] {p} ({len(text):,} chars)")

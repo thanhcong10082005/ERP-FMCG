@@ -28,8 +28,13 @@ export const LoginScreen: React.FC = () => {
       const result = await devLogin(identifier.trim());
       setUser(result.user, result.access_token);
 
-      // Sync master data
-      await syncMasterData(result.user.tenant_id);
+      // Sync master data — KHÔNG được chặn đăng nhập nếu sync lỗi
+      // (offline lúc đăng nhập, hoặc master endpoint lỗi).
+      try {
+        await syncMasterData(result.user.tenant_id);
+      } catch (err) {
+        console.warn('[Login] sync master data thất bại — vẫn cho đăng nhập:', err);
+      }
 
       // Navigate to home
       navigate('/home', { replace: true });

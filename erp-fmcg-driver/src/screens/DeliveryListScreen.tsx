@@ -23,8 +23,8 @@ export const DeliveryListScreen: React.FC = () => {
       return;
     }
     const tripIdStr = sessionStorage.getItem(SESSION_TRIP_KEY);
-    const tripId = tripIdStr ? parseInt(tripIdStr, 10) : NaN;
-    if (!tripId || isNaN(tripId)) {
+    // trip_id là UUID string — KHÔNG parseInt.
+    if (!tripIdStr) {
       navigate('/home', { replace: true });
       return;
     }
@@ -33,7 +33,7 @@ export const DeliveryListScreen: React.FC = () => {
         await ensureDbOpen();
         // Try online first
         try {
-          const res = await api.get(`/api/sales/trips/${tripId}`);
+          const res = await api.get(`/api/sales/trips/${tripIdStr}`);
           useDriverStore.setState({
             currentTrip: res.data,
             orders: res.data.orders || [],
@@ -42,7 +42,7 @@ export const DeliveryListScreen: React.FC = () => {
           return;
         } catch {
           // Fallback offline
-          const local = await getTripWithOrders(tripId);
+          const local = await getTripWithOrders(tripIdStr);
           if (local) {
             useDriverStore.setState({
               currentTrip: local,

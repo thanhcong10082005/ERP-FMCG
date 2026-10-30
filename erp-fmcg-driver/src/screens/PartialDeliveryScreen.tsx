@@ -16,14 +16,14 @@ export const PartialDeliveryScreen: React.FC = () => {
   const navigate = useNavigate();
   const { orders } = useDriverStore();
 
-  const tripOrderIdNum = parseInt(tripOrderId || '0', 10);
+  const tripOrderIdStr = tripOrderId || '';
   const order: TripOrder | undefined = orders.find(
-    (o) => Number(o.trip_order_id) === tripOrderIdNum,
+    (o) => o.trip_order_id === tripOrderIdStr,
   );
 
-  const [quantities, setQuantities] = useState<Record<number, number>>(() => {
-    // Initialize with ordered quantities
-    const map: Record<number, number> = {};
+  // key của Record là product_id (string/UUID), không phải number.
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
     (order?.items || []).forEach((item: SOItem) => {
       map[item.product_id] = item.quantity;
     });
@@ -43,7 +43,7 @@ export const PartialDeliveryScreen: React.FC = () => {
     );
   }
 
-  const handleQtyChange = (productId: number, newQty: number) => {
+  const handleQtyChange = (productId: string, newQty: number) => {
     setQuantities((prev) => ({ ...prev, [productId]: newQty }));
   };
 
@@ -147,7 +147,7 @@ export const PartialDeliveryScreen: React.FC = () => {
                 orderedQty={item.quantity}
                 currentQty={quantities[item.product_id] ?? item.quantity}
                 productName={item.product_name}
-                unitName={item.unit_name || 'đơn vị'}
+                unitName={item.uom_code || 'đơn vị'}
                 onChange={(newQty) => handleQtyChange(item.product_id, newQty)}
               />
             </div>

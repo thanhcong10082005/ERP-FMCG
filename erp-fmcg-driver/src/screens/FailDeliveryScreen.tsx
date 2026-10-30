@@ -20,9 +20,10 @@ export const FailDeliveryScreen: React.FC = () => {
   const navigate = useNavigate();
   const { orders, submitFailedDelivery } = useDriverStore();
 
-  const tripOrderIdNum = parseInt(tripOrderId || '0', 10);
+  // trip_order_id là UUID string.
+  const tripOrderIdStr = tripOrderId || '';
   const order: TripOrder | undefined = orders.find(
-    (o) => Number(o.trip_order_id) === tripOrderIdNum,
+    (o) => o.trip_order_id === tripOrderIdStr,
   );
 
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export const FailDeliveryScreen: React.FC = () => {
 
     try {
       const reason = selectedReason === 'OTHER' ? otherReason.trim() : selectedReason;
-      await submitFailedDelivery(tripOrderIdNum, reason, photo || '');
+      await submitFailedDelivery(tripOrderIdStr, reason, photo || '');
       navigate('/deliveries');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Lỗi khi hủy đơn');

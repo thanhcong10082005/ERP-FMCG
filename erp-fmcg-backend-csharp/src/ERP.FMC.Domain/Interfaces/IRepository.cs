@@ -41,6 +41,15 @@ public interface IUnitOfWork : IDisposable
     IRepository<Entities.ImportError> ImportErrors { get; }
     IRepository<Entities.ImportFieldMapping> ImportFieldMappings { get; }
     IRepository<Entities.AuditLog> AuditLogs { get; }
+    // nghiệp vụ giao hàng
+    IRepository<Entities.DeliveryTrip> DeliveryTrips { get; }
+    IRepository<Entities.DeliveryTripOrder> DeliveryTripOrders { get; }
+    IRepository<Entities.DeliveryPod> DeliveryPods { get; }
+    IRepository<Entities.PodItem> PodItems { get; }
+    IRepository<Entities.PodAttachment> PodAttachments { get; }
+    // ★ PHASE 6B.4 — đối soát cuối ngày
+    IRepository<Entities.EodReconciliation> EodReconciliations { get; }
+    IRepository<Entities.EodReconciliationItem> EodReconciliationItems { get; }
     Task<int> SaveChangesAsync();
     Task BeginTransactionAsync();
     Task CommitTransactionAsync();

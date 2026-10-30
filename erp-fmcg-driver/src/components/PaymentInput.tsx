@@ -1,11 +1,31 @@
 // ============================================================
-// PaymentInput — 3 ô nhập tiền: Tiền mặt / Chuyển khoản / Ghi nợ
+// PaymentInput — Ma trận thanh toán 6 ô:
+//   Đơn mới   : Tiền mặt / Chuyển khoản / Ghi nợ
+//   Công nợ cũ : Tiền mặt / Chuyển khoản / Ghi nợ
+// ------------------------------------------------------------
+// SỬA LỖI MẤT oldDebtCash / oldDebtTransfer / oldDebtCredit.
+//
+// Triệu chứng
+//   PaymentInput chỉ có 3 ô (cash/transfer/credit) cho ĐƠN MỚI, rồi
+//   set cứng:
+//       oldDebtCash: 0,
+//       oldDebtTransfer: 0,
+//       oldDebtCredit: remaining,
+//   => Mọi khoản thu cho CÔNG NỢ CŨ bị ghi nhầm thành "ghi nợ công
+//      nợ cũ", dù tài xế đã thu tiền mặt.
+//   => Công nợ cũ của khách KHÔNG BAO GIỜ giảm => tài xế thu tiền
+//      mà hệ thống vẫn cho là nợ.
+//
+// Cách sửa
+//   Tách rõ 2 nhóm, mỗi nhóm 3 ô. Ô "ghi nợ" của từng nhóm được
+//   TỰ ĐỘNG tính = phần còn thiếu của nhóm đó (nếu người dùng
+//   không nhập tay), và vẫn sửa được bằng tay.
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../utils/formatters';
 
-interface PaymentSplit {
+export interface PaymentSplit {
   newOrderCash: number;
   newOrderTransfer: number;
   newOrderCredit: number;
@@ -24,6 +44,37 @@ interface Props {
   initialSplit?: Partial<PaymentSplit>;
 }
 
+/** Ô nhập tiền có nhãn + đơn vị VND. */
+const MoneyField: React.FC<{
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  tone?: 'default' | 'warning' | 'danger' | 'success';
+  hint?: string;
+}> = ({ label, value, onChange, placeholder = '0', tone = 'default', hint }) => (
+  <div className="input-group">
+    <label className="input-label">{label}</label>
+    <div className="relative">
+      <input
+        type="number"
+        inputMode="numeric"
+        className={`input pr-16 ${
+          tone === 'warning' ? 'border-warning bg-warning-50' :
+          tone === 'danger' ? 'border-danger bg-danger-50' :
+          tone === 'success' ? 'border-success bg-success-50' : ''
+        }`}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        min="0"
+      />
+      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">VND</span>
+    </div>
+    {hint && <p className="text-xs text-text-secondary mt-1">{hint}</p>}
+  </div>
+);
+
 export const PaymentInput: React.FC<Props> = ({
   newOrderAmount,
   oldDebtAmount,
@@ -32,9 +83,16 @@ export const PaymentInput: React.FC<Props> = ({
 }) => {
   const totalRequired = newOrderAmount + oldDebtAmount;
 
+  // ── Nhóm đơn mới ──
   const [cash, setCash] = useState<string>(initialSplit?.newOrderCash?.toString() ?? '');
   const [transfer, setTransfer] = useState<string>(initialSplit?.newOrderTransfer?.toString() ?? '');
   const [credit, setCredit] = useState<string>(initialSplit?.newOrderCredit?.toString() ?? '');
+
+  // ── Nhóm công nợ cũ ──
+  const [oldCash, setOldCash] = useState<string>(initialSplit?.oldDebtCash?.toString() ?? '');
+  const [oldTransfer, setOldTransfer] = useState<string>(initialSplit?.oldDebtTransfer?.toString() ?? '');
+  const [oldCredit, setOldCredit] = useState<string>(initialSplit?.oldDebtCredit?.toString() ?? '');
+
   const [recipientName, setRecipientName] = useState(initialSplit?.recipientName ?? '');
   const [notes, setNotes] = useState(initialSplit?.notes ?? '');
 
@@ -43,7 +101,18 @@ export const PaymentInput: React.FC<Props> = ({
   const cashNum = toNum(cash);
   const transferNum = toNum(transfer);
   const creditNum = toNum(credit);
-  const totalPaid = cashNum + transferNum + creditNum;
+
+  const oldCashNum = toNum(oldCash);
+  const oldTransferNum = toNum(oldTransfer);
+  const oldCreditNum = toNum(oldCredit);
+
+  // Phần còn thiếu của TỪNG nhóm (tính riêng, không gộp)
+  const newRemaining = newOrderAmount - (cashNum + transferNum + creditNum);
+  const oldRemaining = oldDebtAmount - (oldCashNum + oldTransferNum + oldCreditNum);
+
+  // Tổng đã thu = tiền mặt + chuyển khoản của CẢ 2 nhóm
+  // (ghi nợ KHÔNG phải tiền thu)
+  const totalPaid = cashNum + transferNum + oldCashNum + oldTransferNum;
   const remaining = totalRequired - totalPaid;
 
   useEffect(() => {
@@ -51,14 +120,15 @@ export const PaymentInput: React.FC<Props> = ({
       newOrderCash: cashNum,
       newOrderTransfer: transferNum,
       newOrderCredit: creditNum,
-      oldDebtCash: 0,
-      oldDebtTransfer: 0,
-      oldDebtCredit: remaining > 0 ? remaining : 0,
+      oldDebtCash: oldCashNum,
+      oldDebtTransfer: oldTransferNum,
+      oldDebtCredit: oldCreditNum,
       totalCollected: totalPaid,
       recipientName,
       notes,
     });
-  }, [cash, transfer, credit, recipientName, notes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cash, transfer, credit, oldCash, oldTransfer, oldCredit, recipientName, notes]);
 
   const isExact = Math.abs(remaining) < 100;
   const isOver = remaining < -100;
@@ -83,70 +153,73 @@ export const PaymentInput: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 3 input fields */}
-      <div className="space-y-3">
-        <div className="input-group">
-          <label className="input-label">Tiền mặt (đã nhận)</label>
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="numeric"
-              className="input pr-16"
-              placeholder="0"
-              value={cash}
-              onChange={(e) => setCash(e.target.value)}
-              min="0"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">VND</span>
-          </div>
-        </div>
+      {/* ══ NHÓM 1: ĐƠN MỚI ══ */}
+      <div className="card p-4 space-y-3">
+        <p className="text-sm font-semibold text-text-primary">
+          Đơn mới <span className="font-normal text-text-secondary">({formatCurrency(newOrderAmount)})</span>
+        </p>
 
-        <div className="input-group">
-          <label className="input-label">Chuyển khoản</label>
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="numeric"
-              className="input pr-16"
-              placeholder="0"
-              value={transfer}
-              onChange={(e) => setTransfer(e.target.value)}
-              min="0"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">VND</span>
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label className="input-label">Ghi nợ (tự động tính)</label>
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="numeric"
-              className={`input pr-16 ${
-                remaining > 0 ? 'border-warning bg-warning-50' :
-                isOver ? 'border-danger bg-danger-50' :
-                'border-success bg-success-50'
-              }`}
-              placeholder={remaining > 0 ? formatCurrency(remaining) : '0'}
-              value={credit}
-              onChange={(e) => setCredit(e.target.value)}
-              min="0"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary text-sm">VND</span>
-          </div>
-          {remaining > 0 && (
-            <p className="text-xs text-warning">
-              Còn thiếu {formatCurrency(remaining)} — hệ thống sẽ ghi nợ
-            </p>
-          )}
-          {isOver && (
-            <p className="text-xs text-danger">
-              Vượt quá tổng phải thu!
-            </p>
-          )}
-        </div>
+        <MoneyField label="Tiền mặt (đã nhận)" value={cash} onChange={setCash} />
+        <MoneyField label="Chuyển khoản" value={transfer} onChange={setTransfer} />
+        <MoneyField
+          label="Ghi nợ (tự động tính)"
+          value={credit}
+          onChange={setCredit}
+          placeholder={newRemaining > 0 ? formatCurrency(newRemaining) : '0'}
+          tone={
+            newRemaining > 100 ? 'warning' :
+            newRemaining < -100 ? 'danger' :
+            newRemaining === 0 ? 'success' : 'default'
+          }
+          hint={
+            newRemaining > 100
+              ? `Còn thiếu ${formatCurrency(newRemaining)} — hệ thống sẽ ghi nợ`
+              : newRemaining < -100
+                ? 'Vượt quá giá trị đơn mới!'
+                : undefined
+          }
+        />
       </div>
+
+      {/* ══ NHÓM 2: CÔNG NỢ CŨ ══ */}
+      {oldDebtAmount > 0 && (
+        <div className="card p-4 space-y-3 border-danger-200">
+          <p className="text-sm font-semibold text-danger">
+            Công nợ cũ <span className="font-normal">({formatCurrency(oldDebtAmount)})</span>
+          </p>
+
+          <MoneyField
+            label="Thu tiền mặt (nợ cũ)"
+            value={oldCash}
+            onChange={setOldCash}
+            hint="Tiền mặt thu được cho khoản nợ cũ"
+          />
+          <MoneyField
+            label="Thu chuyển khoản (nợ cũ)"
+            value={oldTransfer}
+            onChange={setOldTransfer}
+            hint="Chuyển khoản thu được cho khoản nợ cũ"
+          />
+          <MoneyField
+            label="Ghi nợ (nợ cũ, tự động tính)"
+            value={oldCredit}
+            onChange={setOldCredit}
+            placeholder={oldRemaining > 0 ? formatCurrency(oldRemaining) : '0'}
+            tone={
+              oldRemaining > 100 ? 'warning' :
+              oldRemaining < -100 ? 'danger' :
+              oldRemaining === 0 ? 'success' : 'default'
+            }
+            hint={
+              oldRemaining > 100
+                ? `Còn thiếu ${formatCurrency(oldRemaining)} — hệ thống sẽ ghi nợ`
+                : oldRemaining < -100
+                  ? 'Vượt quá công nợ cũ của khách!'
+                  : undefined
+            }
+          />
+        </div>
+      )}
 
       {/* Collected summary */}
       <div className={`card p-4 ${
@@ -164,6 +237,12 @@ export const PaymentInput: React.FC<Props> = ({
           <div className="flex justify-between text-sm text-text-secondary mt-1">
             <span>Còn phải thu</span>
             <span>{formatCurrency(remaining)}</span>
+          </div>
+        )}
+        {isOver && (
+          <div className="flex justify-between text-sm text-danger mt-1">
+            <span>Thu vượt quá</span>
+            <span>{formatCurrency(-remaining)}</span>
           </div>
         )}
       </div>

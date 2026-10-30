@@ -88,6 +88,14 @@ public class UnitOfWork : IUnitOfWork
         ImportErrors = new Repository<ImportError>(_context);
         ImportFieldMappings = new Repository<ImportFieldMapping>(_context);
         AuditLogs = new Repository<AuditLog>(_context);
+        DeliveryTrips = new Repository<DeliveryTrip>(_context);
+        DeliveryTripOrders = new Repository<DeliveryTripOrder>(_context);
+        DeliveryPods = new Repository<DeliveryPod>(_context);
+        PodItems = new Repository<PodItem>(_context);
+        PodAttachments = new Repository<PodAttachment>(_context);
+        // ★ PHASE 6B.4 — đối soát cuối ngày
+        EodReconciliations = new Repository<EodReconciliation>(_context);
+        EodReconciliationItems = new Repository<EodReconciliationItem>(_context);
     }
 
     public IRepository<Partner> Partners { get; }
@@ -106,6 +114,15 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<ImportStaging> ImportStaging { get; }
     public IRepository<ImportError> ImportErrors { get; }
     public IRepository<ImportFieldMapping> ImportFieldMappings { get; }
+    // nghiệp vụ giao hàng
+    public IRepository<DeliveryTrip> DeliveryTrips { get; }
+    public IRepository<DeliveryTripOrder> DeliveryTripOrders { get; }
+    public IRepository<DeliveryPod> DeliveryPods { get; }
+    public IRepository<PodItem> PodItems { get; }
+    public IRepository<PodAttachment> PodAttachments { get; }
+    // ★ PHASE 6B.4 — đối soát cuối ngày
+    public IRepository<EodReconciliation> EodReconciliations { get; }
+    public IRepository<EodReconciliationItem> EodReconciliationItems { get; }
 
     public Task<int> SaveChangesAsync() => _context.SaveChangesAsync();
 

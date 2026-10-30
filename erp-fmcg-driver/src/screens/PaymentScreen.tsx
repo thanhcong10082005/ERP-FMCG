@@ -18,17 +18,18 @@ export const PaymentScreen: React.FC = () => {
   const location = useLocation();
   const { orders, submitFullDelivery, submitPartialDelivery } = useDriverStore();
 
-  const tripOrderIdNum = parseInt(tripOrderId || '0', 10);
+  // tripOrderId là string (UUID), không parseInt.
+  const tripOrderIdStr = tripOrderId ?? '';
   const mode = new URLSearchParams(location.search).get('mode') || 'full';
 
   const order: TripOrder | undefined = orders.find(
-    (o) => Number(o.trip_order_id) === tripOrderIdNum,
+    (o) => o.trip_order_id === tripOrderIdStr,
   );
 
   // From PartialDeliveryScreen navigation state
   const locationState = location.state as {
     deliveredItems?: Array<{
-      product_id: number;
+      product_id: string;
       product_name: string;
       ordered_qty: number;
       delivered_qty: number;
@@ -38,13 +39,16 @@ export const PaymentScreen: React.FC = () => {
     }>;
     signatureData?: string;
     photoData?: string;
-    quantities?: Record<number, number>;
+    quantities?: Record<string, number>;
   } | null;
 
   const [payment, setPayment] = useState<{
     newOrderCash: number;
     newOrderTransfer: number;
     newOrderCredit: number;
+    oldDebtCash: number;
+    oldDebtTransfer: number;
+    oldDebtCredit: number;
     totalCollected: number;
     recipientName: string;
     notes: string;
@@ -52,6 +56,9 @@ export const PaymentScreen: React.FC = () => {
     newOrderCash: 0,
     newOrderTransfer: 0,
     newOrderCredit: 0,
+    oldDebtCash: 0,
+    oldDebtTransfer: 0,
+    oldDebtCredit: 0,
     totalCollected: 0,
     recipientName: '',
     notes: '',
@@ -82,6 +89,9 @@ export const PaymentScreen: React.FC = () => {
     newOrderCash: number;
     newOrderTransfer: number;
     newOrderCredit: number;
+    oldDebtCash: number;
+    oldDebtTransfer: number;
+    oldDebtCredit: number;
     totalCollected: number;
     recipientName: string;
     notes: string;
@@ -100,13 +110,15 @@ export const PaymentScreen: React.FC = () => {
 
     try {
       if (mode === 'full') {
-        await submitFullDelivery(tripOrderIdNum, {
+        await submitFullDelivery(tripOrderIdStr, {
           newOrderCash: payment.newOrderCash,
           newOrderTransfer: payment.newOrderTransfer,
           newOrderCredit: payment.newOrderCredit,
-          oldDebtCash: 0,
-          oldDebtTransfer: 0,
-          oldDebtCredit: 0,
+          // truyền đủ 6 ô. Trước đây 3 ô công nợ cũ
+          //   bị set cứng = 0 => mất tiền thu nợ cũ.
+          oldDebtCash: payment.oldDebtCash,
+          oldDebtTransfer: payment.oldDebtTransfer,
+          oldDebtCredit: payment.oldDebtCredit,
           totalCollected: payment.totalCollected,
           recipientName: payment.recipientName,
           notes: payment.notes,
@@ -123,14 +135,14 @@ export const PaymentScreen: React.FC = () => {
         }));
 
         await submitPartialDelivery(
-          tripOrderIdNum,
+          tripOrderIdStr,
           {
             newOrderCash: payment.newOrderCash,
             newOrderTransfer: payment.newOrderTransfer,
             newOrderCredit: payment.newOrderCredit,
-            oldDebtCash: 0,
-            oldDebtTransfer: 0,
-            oldDebtCredit: 0,
+            oldDebtCash: payment.oldDebtCash,
+            oldDebtTransfer: payment.oldDebtTransfer,
+            oldDebtCredit: payment.oldDebtCredit,
             totalCollected: payment.totalCollected,
             recipientName: payment.recipientName,
             notes: payment.notes,
@@ -189,8 +201,7 @@ export const PaymentScreen: React.FC = () => {
               {(order.items || []).map((item: SOItem) => {
                 const delivered = locationState.deliveredItems?.find(
                   (d) => d.product_id === item.product_id,
-                );
-                return (
+                );                return (
                   <div key={item.so_item_id} className="flex justify-between text-sm py-0.5">
                     <span className="text-text-secondary">{item.product_name}</span>
                     <span className="font-medium">

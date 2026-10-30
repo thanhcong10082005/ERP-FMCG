@@ -97,10 +97,9 @@ npm run dev
 
 Mở [http://localhost:5173](http://localhost:5173).
 
-> ℹ️ Driver App gọi nhóm API `/api/auth/dev-login`, `/api/sales/trips`,
-> `/api/sales/pod` — các route này **chưa có** trong backend C#. Chi tiết và
-> cách xử lý: [erp-fmcg-driver/README.md](erp-fmcg-driver/README.md) mục 8
-> "Phạm vi bàn giao".
+> ✅ Driver App gọi nhóm API `/api/auth/dev-login`, `/api/sales/trips`,
+> `/api/sales/pod` — các route này **đã có** trong backend C# (Phase 5B).
+> Driver App dùng chung một backend, không còn phụ thuộc backend NestJS cũ.
 
 ---
 
@@ -112,6 +111,7 @@ Mở [http://localhost:5173](http://localhost:5173).
 | Backend    | ASP.NET Core 8, Entity Framework Core 8, AutoMapper, FluentValidation, Swashbuckle                  |
 | Database   | MS SQL Server 2022, schema `tenant`, collation `Vietnamese_CI_AS`, system-versioned temporal tables |
 | Driver App | React 18, TypeScript 5, Vite 5, Tailwind CSS 3, Zustand, Dexie, Axios                               |
+| PWA       | vite-plugin-pwa (Workbox) — offline, cài đặt được, cache master data                                   |
 | Nhập liệu  | Python 3 + pandas + pyodbc                                                                          |
 
 
@@ -157,3 +157,59 @@ Xem [erp-fmcg-database/README.md](erp-fmcg-database/README.md) để biết chi 
 
 ---
 
+---
+
+## 7. Phase 6 — Anti-fraud, Vận hành & Hardening
+
+Phase 6 bổ sung 3 nhóm năng lực, tất cả **nằm trong `Pack/`**:
+
+### 7.1. Chống gian lận & Idempotency (6A)
+
+| Hạng mục                | Thành phần                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| Time-lock 05:00–22:00  | `AntiFraudService` — giờ VN (`Asia/Ho_Chi_Minh`)                                          |
+| GPS Gate ≤ 100 m       | Haversine, bỏ qua khách chưa geocode                                                      |
+| No Backdate             | Cảnh báo lệch timestamp > 15 phút                                                          |
+| Idempotency POD        | `client_pod_id` UNIQUE + transaction atomic, bắt `DbUpdateException` / SQL 2601 / 2627      |
+| Công nợ xác minh       | `old_debt - sum(old_collected)`, `current_debt + new_credit - new_paid`                      |
+| Tồn kho                | Stock ledger opening balance + trigger đồng bộ `tenant.inventory_balances` + sinh ledger `SALE` |
+| Audit log              | `AuditLogMiddleware` ghi `record_id` từ body, user id từ JWT claim                          |
+
+### 7.2. Vận hành (6B)
+
+| Hạng mục         | Thành phần                                                                  |
+| ---------------- | --------------------------------------------------------------------------- |
+| Dispatcher       | `DispatcherService` — tạo chuyến, gán đơn, bản đồ audit                   |
+| Báo cáo          | `ReportService` — 6 báo cáo: doanh thu, tỉ lệ giao, aging nợ, hàng trả về, tiền mặt theo ca, tồn kho thấp |
+| Đối soát EOD    | `EodReconciliationService` + 2 bảng `tenant.eod_reconciliation*`             |
+| Xuất Excel       | `Phase6ExportService` (ClosedXML) — 8 loại báo cáo `.xlsx`                   |
+
+### 7.3. Hardening & DevOps (6C)
+
+| Hạng mục         | Thành phần                                                                |
+| ---------------- | --------------------------------------------------------------------------- |
+| CI/CD            | `.github/workflows/ci.yml` — DB schema + .NET 8 build/test + PWA build        |
+| Verify thống nhất| `scripts/verify_registry.py` + `07_unified_verify.py` (54 check)              |
+| Regression data  | `scripts/08_data_regression.py` — hash SHA-256 chặn hồi quy                   |
+| Rate limiting    | 30 req/phút/tài xế cho `POST /api/sales/pod`                               |
+| Security         | CORS siết, không commit secret                                             |
+| Dọn lịch sử      | `dbo.sp_purge_sales_orders_history` (temporal purge)                        |
+| PWA              | `vite-plugin-pwa`, service worker, `PwaStatusBanner`                        |
+| Health check sâu | `GET /api/health/deep`                                                     |
+| Backup tự động   | `scripts/09_backup_db.ps1` (Express-safe, `RESTORE HEADERONLY` verify, xoay vòng) |
+
+### 7.4. Chạy kiểm tra Phase 6
+
+```powershell
+# Verify thống nhất (54 check)
+python erp-fmcg-database\scripts\07_unified_verify.py
+
+# Regression hash dữ liệu
+python erp-fmcg-database\scripts\08_data_regression.py --check
+
+# Unit test backend
+cd erp-fmcg-backend-csharp
+dotnet test tests/ERP.FMC.Tests
+```
+
+Xem báo cáo đầy đủ: [`../PHASE_6_REPORT.md`](../PHASE_6_REPORT.md)

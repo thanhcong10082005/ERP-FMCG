@@ -1,5 +1,6 @@
 using ERP.FMC.Application.DTOs;
 using ERP.FMC.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ERP.FMC.Api.Controllers;
@@ -12,10 +13,19 @@ public class ExportsController : ControllerBase
     private readonly ExportService _exportService;
     private readonly ILogger<ExportsController> _logger;
 
-    public ExportsController(ExportService exportService, ILogger<ExportsController> logger)
+    // ★ PHASE 6B.5 — xuất Excel cho báo cáo vận hành (8 loại).
+    private readonly Phase6ExportService _phase6Export;
+    private readonly ILogger<ExportsController> _loggerPhase6;
+
+    public ExportsController(
+        ExportService exportService,
+        Phase6ExportService phase6Export,
+        ILogger<ExportsController> logger)
     {
         _exportService = exportService;
+        _phase6Export = phase6Export;
         _logger = logger;
+        _loggerPhase6 = logger;
     }
 
     /// <summary>
@@ -71,7 +81,13 @@ public class ExportsController : ControllerBase
         var exportFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ERP_FMCG", "Exports");
-        var filePath = Path.Combine(exportFolder, fileName);
+
+        // ★ Sanitize fileName — chống path traversal ("../../etc/passwd").
+        var safeName = Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(safeName) || !string.Equals(safeName, fileName, StringComparison.Ordinal))
+            return BadRequest(new { error = "INVALID_FILE_NAME" });
+
+        var filePath = Path.Combine(exportFolder, safeName);
 
         if (!System.IO.File.Exists(filePath))
             return NotFound(new { error = "File not found" });
@@ -82,5 +98,79 @@ public class ExportsController : ControllerBase
 
         var bytes = System.IO.File.ReadAllBytes(filePath);
         return File(bytes, contentType, fileName);
+    }
+
+    // ===================================================================
+    // ★ PHASE 6B.5 — XUẤT EXCEL CHO BÁO CÁO VẬN HÀNH
+    // -------------------------------------------------------------------
+    //   POST /api/exports/phase6/{type}  — sinh file .xlsx
+    //   GET  /api/exports/phase6/download/{fileName} — tai file
+    //
+    //   Type: REVENUE_BY_ROUTE | SUCCESS_RATE | DEBT_AGING | RETURNED_GOODS |
+    //          CASH_BY_SHIFT | LOW_STOCK | POD_BY_TRIP | EOD_RECONCILIATION
+    // ===================================================================
+
+    /// <summary>Sinh báo cáo Phase 6 ra Excel (.xlsx).</summary>
+    [HttpPost("phase6/{type}")]
+    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    public async Task<ActionResult<ExportResultDto>> ExportPhase6(
+        string type,
+        [FromBody] ExportRequestDto request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _phase6Export.ExportAsync(type, request, ct);
+            return Ok(result);
+        }
+        catch (NotSupportedException ex)
+        {
+            return BadRequest(new { error = "UNSUPPORTED_EXPORT_TYPE", message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _loggerPhase6.LogError(ex, "Phase6 export failed: {Type}", type);
+            return BadRequest(new { error = "EXPORT_FAILED", message = ex.Message });
+        }
+    }
+
+    /// <summary>Tai file Excel báo cáo Phase 6.</summary>
+    [HttpGet("phase6/download/{fileName}")]
+    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    public ActionResult DownloadPhase6(string fileName)
+    {
+        var exportFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ERP_FMCG", "Exports");
+        var filePath = Path.Combine(exportFolder, Path.GetFileName(fileName));
+
+        if (!System.IO.File.Exists(filePath))
+            return NotFound(new { error = "NOT_FOUND", message = "Khong tim thay file." });
+
+        var bytes = System.IO.File.ReadAllBytes(filePath);
+        return File(bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
+    }
+
+    /// <summary>Danh sách loại báo cáo Phase 6 có thể xuất.</summary>
+    [HttpGet("phase6/types")]
+    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    public ActionResult<object> GetPhase6Types()
+    {
+        return Ok(new
+        {
+            types = new[]
+            {
+                "REVENUE_BY_ROUTE",
+                "SUCCESS_RATE",
+                "DEBT_AGING",
+                "RETURNED_GOODS",
+                "CASH_BY_SHIFT",
+                "LOW_STOCK",
+                "POD_BY_TRIP",
+                "EOD_RECONCILIATION",
+            }
+        });
     }
 }

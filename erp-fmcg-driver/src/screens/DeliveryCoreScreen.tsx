@@ -11,7 +11,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDriverStore } from '../store/driverStore';
 import { GPSGuard } from '../components/GPSGuard';
-import { checkTimeGuard } from '../utils/timeGuard';
+import { checkTimeGuard, isSameDay } from '../utils/timeGuard';
 import { formatCurrency } from '../utils/formatters';
 import { getTripWithOrders, ensureDbOpen } from '../services/offlineDB';
 import api from '../api/apiClient';
@@ -20,25 +20,33 @@ import type { TripOrder, DeliveryTrip } from '../types';
 const SESSION_TRIP_KEY = 'driver_active_trip_id';
 
 // API returns BigInt-like numeric fields as strings. Coerce once on read.
+// ID là string (UUID) từ server.
+//   KHÔNG parseInt: `parseInt('a1b2...-uuid')` => NaN => mất context.
+//   Các trường đếm (total_orders...) vẫn là number.
 const toInt = (v: unknown): number => {
   if (typeof v === 'number') return v;
   if (typeof v === 'string') return parseInt(v, 10) || 0;
   return 0;
 };
+const asId = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  return '';
+};
 const normalizeTrip = (raw: any): DeliveryTrip => ({
   ...raw,
-  trip_id: toInt(raw.trip_id),
-  warehouse_id: toInt(raw.warehouse_id),
-  driver_id: toInt(raw.driver_id),
+  trip_id: asId(raw.trip_id),
+  warehouse_id: asId(raw.warehouse_id),
+  driver_id: asId(raw.driver_id),
   total_orders: toInt(raw.total_orders),
   delivered_count: toInt(raw.delivered_count),
   failed_count: toInt(raw.failed_count),
   orders: (raw.orders || []).map((o: any) => ({
     ...o,
-    trip_order_id: toInt(o.trip_order_id),
-    so_id: toInt(o.so_id),
-    partner_id: toInt(o.partner_id),
-    warehouse_id: toInt(o.warehouse_id),
+    trip_order_id: asId(o.trip_order_id),
+    so_id: asId(o.so_id),
+    partner_id: asId(o.partner_id),
+    warehouse_id: asId(o.warehouse_id),
     partner_latitude:
       typeof o.partner_latitude === 'string'
         ? parseFloat(o.partner_latitude)
@@ -55,16 +63,17 @@ export const DeliveryCoreScreen: React.FC = () => {
   const navigate = useNavigate();
   const { orders, currentTrip } = useDriverStore();
 
-  const tripOrderIdNum = parseInt(tripOrderId || '0', 10);
-  const tripIdNum = parseInt(tripId || '0', 10);
+  // trip_id / trip_order_id là string (UUID).
+  const tripOrderIdStr = tripOrderId || '';
+  const tripIdStr = tripId || '';
 
   // Guard against re-entering bootstrap more than once per mount per tripId.
-  const bootStartedRef = useRef<number | null>(null);
+  const bootStartedRef = useRef<string | null>(null);
 
   // ── Ensure trip/orders are loaded ─────────────────────────
   const [bootstrapping, setBootstrapping] = useState(
     !currentTrip ||
-      Number(currentTrip.trip_id) !== tripIdNum ||
+      currentTrip.trip_id !== tripIdStr ||
       orders.length === 0,
   );
 
@@ -73,7 +82,7 @@ export const DeliveryCoreScreen: React.FC = () => {
     const state = useDriverStore.getState();
     if (
       state.currentTrip &&
-      Number(state.currentTrip.trip_id) === tripIdNum &&
+      state.currentTrip.trip_id === tripIdStr &&
       state.orders.length > 0
     ) {
       setBootstrapping(false);
@@ -83,39 +92,39 @@ export const DeliveryCoreScreen: React.FC = () => {
       await ensureDbOpen();
       // Try online first
       try {
-        const res = await api.get(`/api/sales/trips/${tripIdNum}`);
+        const res = await api.get(`/api/sales/trips/${tripIdStr}`);
         const trip = normalizeTrip(res.data);
         useDriverStore.setState({
           currentTrip: trip,
           orders: (trip.orders || []) as any,
         });
-        sessionStorage.setItem(SESSION_TRIP_KEY, String(tripIdNum));
+        sessionStorage.setItem(SESSION_TRIP_KEY, tripIdStr);
       } catch {
         // Fallback offline
-        const local = await getTripWithOrders(tripIdNum);
+        const local = await getTripWithOrders(tripIdStr);
         if (local) {
           const trip = normalizeTrip(local);
           useDriverStore.setState({
             currentTrip: trip,
             orders: (trip.orders || []) as any,
           });
-          sessionStorage.setItem(SESSION_TRIP_KEY, String(tripIdNum));
+          sessionStorage.setItem(SESSION_TRIP_KEY, tripIdStr);
         }
       }
     } finally {
       setBootstrapping(false);
     }
-  }, [tripIdNum]);
+  }, [tripIdStr]);
 
   useEffect(() => {
-    if (bootStartedRef.current === tripIdNum) return;
-    bootStartedRef.current = tripIdNum;
+    if (bootStartedRef.current === tripIdStr) return;
+    bootStartedRef.current = tripIdStr;
     bootstrapTrip();
-  }, [tripIdNum, bootstrapTrip]);
+  }, [tripIdStr, bootstrapTrip]);
 
   // Get order from store
   const order: TripOrder | undefined = orders.find(
-    (o) => Number(o.trip_order_id) === tripOrderIdNum,
+    (o) => o.trip_order_id === tripOrderIdStr,
   );
 
   const [gpsValidated, setGpsValidated] = useState(false);
@@ -132,6 +141,45 @@ export const DeliveryCoreScreen: React.FC = () => {
     }
   }, []);
 
+  // time-lock phải kiểm tra LIÊN TỤC, không chỉ 1
+  //   lần lúc mount. Trước đây tài xế mở màn hình lúc 21:59, giao xong
+  //   22:05 vẫn qua chốt chặn.
+  useEffect(() => {
+    const recheck = () => {
+      const result = checkTimeGuard();
+      if (!result.allowed) {
+        setTimeBlocked(true);
+        setTimeMessage(result.message || 'Ngoài giờ giao hàng');
+      } else {
+        setTimeBlocked(false);
+        setTimeMessage('');
+      }
+    };
+
+    const intervalId = setInterval(recheck, 60_000);
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, []);
+
+  // No Backdate — chặn giao lại chuyến của ngày hôm
+  //   qua. Server-side check bắt buộc
+  useEffect(() => {
+    if (!currentTrip?.trip_date) return;
+    if (!isSameDay(currentTrip.trip_date)) {
+      setTimeBlocked(true);
+      setTimeMessage(
+        'Chuyến xe này thuộc ngày trước — không được giao lại. ' +
+        'Vui lòng liên hệ Dispatcher.',
+      );
+    }
+  }, [currentTrip?.trip_date]);
+
   // Redirect if already delivered
   useEffect(() => {
     if (order && order.status !== 'PENDING') {
@@ -144,13 +192,13 @@ export const DeliveryCoreScreen: React.FC = () => {
   useEffect(() => {
     if (!selectedAction) return;
     if (selectedAction === 'partial') {
-      navigate(`/deliver/${tripIdNum}/partial/${tripOrderIdNum}`, { replace: true });
+      navigate(`/deliver/${tripIdStr}/partial/${tripOrderIdStr}`, { replace: true });
     } else if (selectedAction === 'fail') {
-      navigate(`/deliver/${tripIdNum}/fail/${tripOrderIdNum}`, { replace: true });
+      navigate(`/deliver/${tripIdStr}/fail/${tripOrderIdStr}`, { replace: true });
     } else if (selectedAction === 'full') {
-      navigate(`/deliver/${tripIdNum}/pay/${tripOrderIdNum}?mode=full`, { replace: true });
+      navigate(`/deliver/${tripIdStr}/pay/${tripOrderIdStr}?mode=full`, { replace: true });
     }
-  }, [selectedAction, navigate, tripIdNum, tripOrderIdNum]);
+  }, [selectedAction, navigate, tripIdStr, tripOrderIdStr]);
 
   // ── Conditional render guards (hooks above, JSX below) ────
 
@@ -169,7 +217,7 @@ export const DeliveryCoreScreen: React.FC = () => {
         <div className="card p-6 text-center max-w-sm w-full">
           <p className="text-text-secondary mb-4">Không tìm thấy đơn hàng</p>
           <p className="text-xs text-text-secondary mb-4">
-            Đơn này có thể đã hoàn thành hoặc không thuộc chuyến hiện tại (id #{tripOrderIdNum}).
+            Đơn này có thể đã hoàn thành hoặc không thuộc chuyến hiện tại (id #{tripOrderIdStr}).
           </p>
           <button
             type="button"
@@ -208,14 +256,22 @@ export const DeliveryCoreScreen: React.FC = () => {
   }
 
   // ── GPS Guard overlay ────────────────────────────────────
+  // chỉ truyền `onSkip` khi khách KHÔNG có tọa độ.
+  //   Khách có GPS => không có đường bypass.
   if (!gpsValidated) {
+    const partnerHasGps =
+      order.partner_latitude != null &&
+      order.partner_longitude != null &&
+      Number.isFinite(order.partner_latitude) &&
+      Number.isFinite(order.partner_longitude);
+
     return (
       <GPSGuard
         partnerLat={order.partner_latitude}
         partnerLon={order.partner_longitude}
         partnerName={order.partner_name}
         onValidated={() => setGpsValidated(true)}
-        onSkip={() => setGpsValidated(true)}
+        onSkip={partnerHasGps ? undefined : () => setGpsValidated(true)}
       />
     );
   }

@@ -18,6 +18,7 @@ export const HomeScreen: React.FC = () => {
   const [assignedTrip, setAssignedTrip] = useState<DeliveryTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -63,9 +64,14 @@ export const HomeScreen: React.FC = () => {
     setStarting(true);
     try {
       await startTrip(assignedTrip.trip_id);
+      // chỉ navigate khi startTrip THÀNH CÔNG.
+      //   Trước đây store nuốt lỗi nên tài xế bị đưa sang màn hình giao
+      //   hàng dù chuyến chưa bao giờ chuyển sang DELIVERING.
       navigate('/deliveries', { replace: true });
     } catch {
       setStarting(false);
+      const msg = useDriverStore.getState().error;
+      setError(msg ?? 'Không thể bắt đầu chuyến xe — kiểm tra kết nối');
     }
   };
 
@@ -105,6 +111,11 @@ export const HomeScreen: React.FC = () => {
 
       {/* Main content */}
       <div className="flex-1 p-4">
+        {error && (
+          <div className="mb-3 p-3 bg-danger-50 border border-danger-200 rounded-xl">
+            <p className="text-sm text-danger">{error}</p>
+          </div>
+        )}
         {!assignedTrip ? (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
