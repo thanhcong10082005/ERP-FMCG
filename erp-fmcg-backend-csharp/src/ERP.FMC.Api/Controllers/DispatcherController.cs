@@ -7,7 +7,7 @@ using System.Security.Claims;
 namespace ERP.FMC.Api.Controllers;
 
 // ===================================================================
-// ★ PHASE 6B — CONTROLLER DISPATCHER
+// CONTROLLER DISPATCHER
 // -------------------------------------------------------------------
 // Các endpoint cho DISPATCHER (điều phối viên) và quản lý.
 //
@@ -109,7 +109,7 @@ public class DispatcherController : ControllerBase
     }
 
     // -------------------------------------------------------------------
-    // D4 — ★ 6B.3 — Chi tiết chuyến đầy đủ (bản đồ audit)
+    // Chi tiết chuyến đầy đủ (bản đồ audit)
     // -------------------------------------------------------------------
     [HttpGet("trips/{tripId}/full")]
     public async Task<ActionResult<TripFullDto>> GetTripFull(string tripId, CancellationToken ct)

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ERP.FMC.Api.Controllers;
 
 // ===================================================================
-// ★ PHASE 6B.2 — CONTROLLER BÁO CÁO VẬN HÀNH
+// CONTROLLER BÁO CÁO VẬN HÀNH
 // -------------------------------------------------------------------
 //   R1  GET /api/reports/revenue-by-route      doanh thu theo tuyến
 //   R2  GET /api/reports/success-rate          tỷ lệ giao thành công

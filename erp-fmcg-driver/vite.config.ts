@@ -6,8 +6,8 @@ import path from 'path';
 export default defineConfig({
   plugins: [
     react(),
-    // ★ PHASE 6C.7 — PWA that (manifest + service worker).
-    //   Truoc Phase 6C.7 chi co meta tag `mobile-web-app-capable`:
+    // PWA that (manifest + service worker).
+    //   Truoc day chi co meta tag `mobile-web-app-capable`:
     //   - KHONG co manifest.json -> Android Chrome KHONG hien "Cai app".
     //   - KHONG co service worker -> mat mang la app trang tron, mat
     //     toan bo queue POD offline (Dexie) vi trang chua kip load.

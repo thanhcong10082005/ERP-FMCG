@@ -15,18 +15,18 @@ Pack/erp-fmcg-database/
 ├── requirements.txt                # Dependency Python
 ├── database/
 │   ├── 01_schema/                  # ★ File DDL nguồn (00..07)
-│   └── 02_migration/               # ★ Migration Phase 5/6 (07..10)
+│   └── 02_migration/               # ★ Migration (07..10)
 ├── scripts/
 │   ├── 01_full_import_pipeline.py  # ★ Pipeline nhập dữ liệu duy nhất
 │   ├── 02_verify_data.py           # Đối soát + xuất báo cáo (CSV/JSON)
 │   ├── 03_clean_db.ps1             # Reset dữ liệu nghiệp vụ (giữ master data)
-│   ├── 03_import_partner_debt.py   # Nhập công nợ khách hàng (Phase 5)
-│   ├── 04_verify_pod_idempotency.py# Kiểm tra idempotency POD (Phase 5)
-│   ├── 05_apply_phase6_migration.py# Áp dụng migration Phase 6
+│   ├── 03_import_partner_debt.py   # Nhập công nợ khách hàng
+│   ├── 04_verify_pod_idempotency.py# Kiểm tra idempotency POD
+│   ├── 05_apply_migration.py       # Áp dụng migration dispatcher/EOD
 │   ├── 06_seed_opening_stock.py    # Tạo opening balance stock ledger
-│   ├── 07_unified_verify.py        # ★ Verify thống nhất 54 check (Phase 6)
-│   ├── 08_data_regression.py       # ★ Hash regression dữ liệu (Phase 6)
-│   ├── 09_backup_db.ps1            # ★ Backup tự động + verify (Phase 6)
+│   ├── 07_unified_verify.py        # ★ Verify thống nhất 54 check
+│   ├── 08_data_regression.py       # ★ Hash regression dữ liệu
+│   ├── 09_backup_db.ps1            # ★ Backup tự động + verify
 │   ├── verify_registry.py          # ★ Nguồn sự thật 54 check
 │   ├── build_schema.py             # Sinh lại 01_schema.sql từ file nguồn
 │   └── build_verify_sql.py         # Sinh lại 02_verify.sql từ registry
@@ -172,8 +172,8 @@ Dry-run mất **~40 giây** cho 177.631 dòng và cho kết quả **giống hệ
 | `sales_order_items`  | 176.332 | Chi tiết dòng (FK → orders CASCADE)     |
 | `price_lists`        | 583     | **Temporal** — giá theo SKU × segment   |
 | `uom_conversions`    | 124     | Quy đổi đơn vị tính                     |
-| `stock_ledger`       | 0       | Chờ nguồn dữ liệu tồn kho (xem Phase 5) |
-| `inventory_balances` | 0       | Chờ nguồn dữ liệu tồn kho (xem Phase 5) |
+| `stock_ledger`       | 0       | Chờ nguồn dữ liệu tồn kho            |
+| `inventory_balances` | 0       | Chờ nguồn dữ liệu tồn kho            |
 
 
 ### Staging / Import / Audit
@@ -192,21 +192,21 @@ Dry-run mất **~40 giây** cho 177.631 dòng và cho kết quả **giống hệ
 
 ---
 
-## 7. Phase 6 — Migration, Verify & Backup
+## 7. Migration, Verify & Backup
 
-### 7.1. Migration Phase 5 / Phase 6
+### 7.1. Bộ migration
 
 | File                                        | Nội dung                                                     |
 | ------------------------------------------- | ------------------------------------------------------------ |
-| `database/02_migration/07_phase5_migration.sql` | 4 bảng delivery, `client_pod_id` UNIQUE, GPS, công nợ     |
-| `database/02_migration/08_phase5c_user_phone.sql` | Thêm `phone` cho `user_accounts`                        |
-| `database/02_migration/09_phase6_dispatcher_eod.sql` | Bảng dispatcher, EOD reconciliation, index báo cáo |
-| `database/02_migration/10_phase6_stock_trigger_fix.sql` | Sửa trigger stock ledger + CHECK `average_cost >= 0` |
+| `database/02_migration/07_migration.sql` | 4 bảng delivery, `client_pod_id` UNIQUE, GPS, công nợ     |
+| `database/02_migration/08_user_phone.sql` | Thêm `phone` cho `user_accounts`                        |
+| `database/02_migration/09_dispatcher_eod.sql` | Bảng dispatcher, EOD reconciliation, index báo cáo |
+| `database/02_migration/10_stock_trigger_fix.sql` | Sửa trigger stock ledger + CHECK `average_cost >= 0` |
 
 Áp dụng lên DB đang chạy:
 
 ```powershell
-python scripts\05_apply_phase6_migration.py --server ".\SQLEXPRESS" --database "ERP_FMCG"
+python scripts\05_apply_migration.py --server ".\SQLEXPRESS" --database "ERP_FMCG"
 ```
 
 Tạo opening balance tồn kho (nếu tồn kho âm do lịch sử import):
@@ -227,7 +227,7 @@ python scripts\07_unified_verify.py
 python scripts\build_verify_sql.py      # sinh lại 02_verify.sql
 ```
 
-Nhóm check: **A** (import), **D** (Phase 5 delivery), **P6** (anti-fraud / stock / EOD / hardening).
+Nhóm check: **IMPORT** (import), **DELIVERY** (schema nghiệp vụ giao hàng), **OPS** (anti-fraud / stock / EOD / hardening).
 
 ### 7.3. Regression dữ liệu (hash)
 

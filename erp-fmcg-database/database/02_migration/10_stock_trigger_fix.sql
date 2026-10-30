@@ -1,7 +1,7 @@
 -- ===================================================================
 -- Trigger: Sau khi INSERT stock_ledger → UPSERT inventory_balances
 -- -------------------------------------------------------------------
--- ★ PHASE 6A.3 FIX — lỗi "average_cost NULL khi tồn về 0".
+-- FIX — lỗi "average_cost NULL khi tồn về 0".
 --
 --   SYMPTOM (triệu chứng):
 --     INSERT vào tenant.stock_ledger bị lỗi:
@@ -73,7 +73,7 @@ BEGIN
                 ELSE target.average_cost
             END,
             last_transaction_at = source.last_tx,
-            updated_at = GETDATE()
+            updated_at = GETDATE
 
     WHEN NOT MATCHED THEN
         INSERT (warehouse_id, product_id, uom_code, quantity_on_hand, average_cost, last_transaction_at)

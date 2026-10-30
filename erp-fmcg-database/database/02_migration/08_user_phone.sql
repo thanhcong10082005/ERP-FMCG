@@ -32,7 +32,7 @@ FROM tenant.user_accounts
 WHERE role = 'driver'
 GROUP BY role;
 
-PRINT '[5C.1] Role "driver" là nhãn chuỗi, không cần CREATE ROLE.';
+PRINT '[user-phone] Role "driver" là nhãn chuỗi, không cần CREATE ROLE.';
 GO
 
 -- ── 2. Gán SĐT cho tài xế (role SALES / WAREHOUSE) ─────────────
@@ -67,7 +67,7 @@ END
 CLOSE cur;
 DEALLOCATE cur;
 
-PRINT '[5C.1] Đã gán SĐT cho ' + CAST(@i AS VARCHAR(10)) + ' user (role SALES/WAREHOUSE).';
+PRINT '[user-phone] Đã gán SĐT cho ' + CAST(@i AS VARCHAR(10)) + ' user (role SALES/WAREHOUSE).';
 GO
 
 -- ── 3. Gán SĐT riêng cho 5 tài xế "chính" (để test app) ─────
@@ -86,7 +86,7 @@ SET u.phone = e.phone
 FROM tenant.user_accounts u
 JOIN @emails e ON LOWER(u.email) = LOWER(e.email);
 
-PRINT '[5C.1] Đã gán SĐT cố định cho 5 tài xế test.';
+PRINT '[user-phone] Đã gán SĐT cố định cho 5 tài xế test.';
 GO
 
 -- ── 4. Kiểm tra kết quả ─────────────────────────────────────

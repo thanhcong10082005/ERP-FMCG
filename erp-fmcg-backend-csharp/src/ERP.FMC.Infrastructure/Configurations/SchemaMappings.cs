@@ -315,7 +315,7 @@ public class PodAttachmentSchemaConfiguration : IEntityTypeConfiguration<PodAtta
 }
 
 // ===================================================================
-// ★ PHASE 6B.4 — ĐỐI SOÁT CUỐI NGÀY (EOD)
+// ĐỐI SOÁT CUỐI NGÀY (EOD)
 // ===================================================================
 
 public class EodReconciliationSchemaConfiguration : IEntityTypeConfiguration<EodReconciliation>

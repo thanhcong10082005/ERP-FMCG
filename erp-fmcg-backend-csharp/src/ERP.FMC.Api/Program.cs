@@ -29,7 +29,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, b =>
         b.EnableRetryOnFailure(maxRetryCount: 3)));
 
-// ★ PHASE 6C: đã gỡ AutoMapper — mapping thủ công trong Mappings/EntityMapper.cs
+// đã gỡ AutoMapper — mapping thủ công trong Mappings/EntityMapper.cs
 
 // DI - Repositories + UoW
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -50,8 +50,8 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 // DI - Infrastructure Services
 builder.Services.AddScoped<BulkOperationService>();
 builder.Services.AddScoped<ERP.FMC.Infrastructure.Services.ExportService>();
-// ★ PHASE 6B.5 — xuất Excel cho 6 báo cáo vận hành + POD + EOD
-builder.Services.AddScoped<ERP.FMC.Infrastructure.Services.Phase6ExportService>();
+// xuất Excel cho 6 báo cáo vận hành + POD + EOD
+builder.Services.AddScoped<ERP.FMC.Infrastructure.Services.OperationsExportService>();
 builder.Services.AddScoped<ImportStagingService>();
 builder.Services.AddScoped<TemporalHistoryService>();
 builder.Services.AddSingleton<ValidationEngine>();
@@ -76,10 +76,10 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IDeliveryTripService, DeliveryTripService>();
 builder.Services.AddScoped<IDeliveryPodService, DeliveryPodService>();
 
-// ★ PHASE 6A.1 — chống gian lận server-side (3 chốt chặn)
+// chống gian lận server-side (3 chốt chặn)
 builder.Services.AddScoped<IAntiFraudService, AntiFraudService>();
 
-// ★ PHASE 6B — dispatcher, báo cáo, đối soát EOD
+// dispatcher, báo cáo, đối soát EOD
 builder.Services.AddScoped<IDispatcherService, DispatcherService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IEodReconciliationService, EodReconciliationService>();
@@ -146,7 +146,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ★ PHASE 6C.4 — RATE LIMITING
+// RATE LIMITING
 //   Chống tài xế spam POD (gửi hàng loạt để bơm nợ / gian lận).
 //   - POST /api/sales/pod: 30 lần / phút / tài xế (IP fallback)
 //   - POST /api/sales/trips/*: 10 lần / phút
@@ -203,7 +203,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // CORS
-// ★ PHASE 6C.5 — siết CORS.
+// siết CORS.
 //   Trước: AllowAnyOrigin() → mọi website đều gọi được API.
 //   Sau: chỉ cho phép origin trong cấu hình `Cors:AllowedOrigins`.
 //   Nếu danh sách rỗng → chỉ cho phép localhost (an toàn mặc định).
@@ -281,7 +281,7 @@ if (!app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseMiddleware<AuditLogMiddleware>();
 app.UseCors();
-// ★ PHASE 6C.4 — rate limiting phải SAU CORS, TRƯỚC auth để key theo user.
+// rate limiting phải SAU CORS, TRƯỚC auth để key theo user.
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -295,7 +295,7 @@ app.Run();
 
 /// <summary>
 /// Lấy khoá phân vùng rate limit.
-/// ★ 6C.4: ưu tiên theo user (tài xế) để 1 tài xế không bị chặn nhầm
+/// Ưu tiên theo user (tài xế) để 1 tài xế không bị chặn nhầm
 ///   khi nhiều tài xế dùng chung NAT/IP trong một khu vực.
 ///   Fallback theo IP cho request chưa xác thực.
 /// </summary>

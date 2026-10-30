@@ -15,7 +15,7 @@
 --   4. 03_staging_tables.sql   - 4 bảng staging (import pipeline)
 --   5. 04_triggers.sql         - trigger tồn kho
 --   6. 06_temporal_audit.sql   - audit_logs + views
---   7. 07_delivery_tables.sql  - 5 bảng nghiệp vụ giao hàng (Phase 5A.1)
+--   7. 07_delivery_tables.sql  - 5 bảng nghiệp vụ giao hàng
 --   8. 05_seed_data.sql        - seed nền tảng
 -- ===================================================================
 
@@ -316,7 +316,7 @@ CREATE TABLE tenant.partners (
     old_debt          DECIMAL(15,2) NOT NULL DEFAULT 0,
     old_debt_date     DATE NULL,
 
-    -- ★ Phase 5A.2 (DB-C10): metadata geocoding
+    -- metadata geocoding
     -- LOW/MEDIUM/HIGH = auto-geocoder; MANUAL = admin/dispatcher sửa tay
     geocoding_confidence  VARCHAR(10) NULL
         CONSTRAINT CHK_partners_geocoding_conf CHECK (
@@ -567,7 +567,7 @@ CREATE TABLE tenant.sales_orders (
     -- Driver App hiển thị "Công nợ cũ" cần thu cho khách này
     old_debt_amount     DECIMAL(15,2) NOT NULL DEFAULT 0,
 
-    -- ★ Phase 5A.2 (DB-C11): retry logic (chuyển từ Postgres v13_1_3)
+    -- retry logic (chuyển từ Postgres v13_1_3)
     -- failure_count >= 3 -> tự động CANCELLED
     failure_count       INT NOT NULL DEFAULT 0,
     failure_reason      VARCHAR(50) NULL
@@ -877,7 +877,7 @@ SET NUMERIC_ROUNDABORT OFF;
 GO
 
 -- ===================================================================
--- PHASE 3: STAGING TABLES + IMPORT PIPELINE
+-- STAGING TABLES + IMPORT PIPELINE
 -- Chạy script này để tạo các bảng staging cho import workflow
 -- ===================================================================
 
@@ -1136,7 +1136,7 @@ BEGIN
     WHEN MATCHED THEN
         UPDATE SET
             quantity_on_hand = target.quantity_on_hand + source.net_quantity,
-            -- ★ PHASE 6A.3 FIX: NULLIF(...,0) gây NULL cho average_cost (NOT NULL)
+            -- NULLIF(...,0) gây NULL cho average_cost (NOT NULL)
             --   khi tồn về đúng 0 → lỗi 515. Chỉ chia khi tồn còn > 0.
             average_cost = CASE
                 WHEN target.quantity_on_hand + source.net_quantity > 0
@@ -1179,7 +1179,7 @@ SET NUMERIC_ROUNDABORT OFF;
 GO
 
 -- ===================================================================
--- PHASE 4: TEMPORAL TABLES + AUDIT LOG
+-- TEMPORAL TABLES + AUDIT LOG
 -- Bật System-Versioned Temporal Tables cho các bảng cần audit
 -- ===================================================================
 
@@ -1388,7 +1388,7 @@ FROM [tenant].[partners] FOR SYSTEM_TIME ALL p;
 GO
 
 PRINT '✅ Created vw_partner_history view';
-PRINT '✅ PHASE 4 setup completed successfully';
+PRINT '✅ TEMPORAL/AUDIT setup completed successfully';
 GO
 
 

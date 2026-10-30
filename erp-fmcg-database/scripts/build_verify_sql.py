@@ -3,7 +3,7 @@
 """
 build_verify_sql.py — SINH `02_verify.sql` từ `verify_registry.py`.
 =============================================================
-★ PHASE 6C.3 — "Hợp nhất bộ verify"
+"Hợp nhất bộ verify"
 
 Registry Python là nguồn sự thật duy nhất. File SQL được SINH RA
 từ registry để:
@@ -48,7 +48,7 @@ SET NOCOUNT ON;
 GO
 
 PRINT '===================================================================';
-PRINT ' ERP-FMCG - BAO CAO KIEM TRA DU LIEU (BO THONG NHAT - PHASE 6C.3)';
+PRINT ' ERP-FMCG - BAO CAO KIEM TRA DU LIEU (BO THONG NHAT)';
 PRINT '===================================================================';
 GO
 

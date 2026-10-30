@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-PHASE 6A.3 — NẠP TỒN KHO ĐẦU KỲ (OPENING BALANCE)
+NẠP TỒN KHO ĐẦU KỲ (OPENING BALANCE)
 =====================================================
-Hiện trạng trước Phase 6A.3:
+Hiện trạng trước ton kho:
   - tenant.stock_ledger chỉ có 16 dòng `SALE` (sinh ra từ test POD)
   - tenant.inventory_balances có 4 dòng với quantity_on_hand = -4  (ÂM)
   => Mọi logic trừ kho sẽ cho âm, báo cáo tồn kho sai, KPI sai.
@@ -49,7 +49,7 @@ def main():
     cur = conn.cursor()
 
     print("=" * 70)
-    print("PHASE 6A.3 — NAP TON KHO DAU KY (OPENING)")
+    print("NAP TON KHO DAU KY (OPENING)")
     print(f"Server={SERVER}  DB={DB}  dry_run={DRY_RUN}")
     print("=" * 70)
 
@@ -109,7 +109,7 @@ def main():
 
         qty = -net
         notes = (
-            f"PHASE 6A.3 opening balance (can bang ton am truoc Phase 6A.4) - SKU {sku}"
+            f"opening balance (can bang ton am truoc ghi so kho) - SKU {sku}"
         )
         if DRY_RUN:
             print(f"  [DRY] INSERT OPENING {sku} +{qty} uom={uom} cost={cost}")

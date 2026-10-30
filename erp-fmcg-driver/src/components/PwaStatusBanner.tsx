@@ -1,5 +1,5 @@
 // ============================================================
-// PWA Status Banner (6C.7)
+// PWA Status Banner ()
 // ------------------------------------------------------------
 // Hien thi trang thai PWA cho tai xe:
 //   1. "Dang cap nhat" — co version moi da tai, can reload.
@@ -7,7 +7,7 @@
 //   3. Nut "Cai app" (beforeinstallprompt).
 //
 // Vi sao can:
-//   Phase 5C.2 sua loi double-POD bang cach sinh `client_pod_id` 1 lan
+//   sua loi double-POD bang cach sinh `client_pod_id` 1 lan
 //   va queue offline. Nhung neu app KHONG co service worker, mo app khi
 //   mat mang = trang trang -> tai xe KHONG giao duoc hang trong vung
 //   phu yeu (vung nong thon, khu cong nghiep).

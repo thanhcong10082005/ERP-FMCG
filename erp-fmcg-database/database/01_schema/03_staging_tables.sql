@@ -13,7 +13,7 @@ SET NUMERIC_ROUNDABORT OFF;
 GO
 
 -- ===================================================================
--- PHASE 3: STAGING TABLES + IMPORT PIPELINE
+-- STAGING TABLES + IMPORT PIPELINE
 -- Chạy script này để tạo các bảng staging cho import workflow
 -- ===================================================================
 

@@ -48,7 +48,7 @@ public class ExceptionMiddleware
     {
         var (status, code) = ex switch
         {
-            // ★ PHASE 6A.1: lỗi chống gian lận có mã riêng để client
+            // lỗi chống gian lận có mã riêng để client
             //   hiển thị đúng hướng xử lý cho tài xế.
             AntiFraudException af => ((int)HttpStatusCode.BadRequest, af.ErrorCode),
             ArgumentException => ((int)HttpStatusCode.BadRequest, "INVALID_ARGUMENT"),
@@ -69,7 +69,7 @@ public class ExceptionMiddleware
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json; charset=utf-8";
 
-        // ★ PHASE 6A.1: kèm khoảng cách GPS cho lỗi GPS_GATE_FAILED.
+        // kèm khoảng cách GPS cho lỗi GPS_GATE_FAILED.
         //   Dùng Dictionary<string, object?> để payload có shape thống nhất
         //   (thiếu `distance_m` khi không phải lỗi GPS).
         var payload = new Dictionary<string, object?>

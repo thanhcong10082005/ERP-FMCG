@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-08_data_regression.py — TEST HỒI QUY DỮ LIỆU (6C.2).
+08_data_regression.py — TEST HỒI QUY DỮ LIỆU.
 =====================================================
-★ PHASE 6C.2 — "Test hồi quy dữ liệu"
+"Test hồi quy dữ liệu"
 
 Mục đích:
   Khi sửa schema / script import / code backend, phải chứng minh rằng
@@ -166,7 +166,7 @@ def compute_all(conn: pyodbc.Connection) -> dict[str, Any]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="ERP-FMCG - test hoi quy du lieu (Phase 6C.2)")
+        description="ERP-FMCG - test hoi quy du lieu (hoi quy du lieu)")
     ap.add_argument("--server", default=os.environ.get("ERP_FMCG_SERVER", r".\SQLEXPRESS"))
     ap.add_argument("--database", default=os.environ.get("ERP_FMCG_DB", "ERP_FMCG"))
     ap.add_argument("--snapshot", action="store_true",
@@ -188,7 +188,7 @@ def main() -> int:
         return 2
 
     print("=" * 78)
-    print(" ERP-FMCG - TEST HOI QUY DU LIEU (6C.2)")
+    print(" ERP-FMCG - TEST HOI QUY DU LIEU")
     print("=" * 78)
 
     try:

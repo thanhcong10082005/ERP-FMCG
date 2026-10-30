@@ -1,5 +1,5 @@
 # ERP-FMCG Database Pack - Python dependencies
-# Phase 4 (MS SQL Server 2022 migration pipeline)
+# MS SQL Server 2022 migration pipeline
 #
 # Cai dat:
 #   python -m pip install -r requirements.txt

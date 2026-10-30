@@ -98,7 +98,7 @@ npm run dev
 Mở [http://localhost:5173](http://localhost:5173).
 
 > ✅ Driver App gọi nhóm API `/api/auth/dev-login`, `/api/sales/trips`,
-> `/api/sales/pod` — các route này **đã có** trong backend C# (Phase 5B).
+> `/api/sales/pod` — các route này **đã có** trong backend C#.
 > Driver App dùng chung một backend, không còn phụ thuộc backend NestJS cũ.
 
 ---
@@ -159,11 +159,11 @@ Xem [erp-fmcg-database/README.md](erp-fmcg-database/README.md) để biết chi 
 
 ---
 
-## 7. Phase 6 — Anti-fraud, Vận hành & Hardening
+## 7. Anti-fraud, Vận hành & Hardening
 
-Phase 6 bổ sung 3 nhóm năng lực, tất cả **nằm trong `Pack/`**:
+Bổ sung 3 nhóm năng lực, tất cả **nằm trong `Pack/`**:
 
-### 7.1. Chống gian lận & Idempotency (6A)
+### 7.1. Chống gian lận & Idempotency
 
 | Hạng mục                | Thành phần                                                                                |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
@@ -175,16 +175,16 @@ Phase 6 bổ sung 3 nhóm năng lực, tất cả **nằm trong `Pack/`**:
 | Tồn kho                | Stock ledger opening balance + trigger đồng bộ `tenant.inventory_balances` + sinh ledger `SALE` |
 | Audit log              | `AuditLogMiddleware` ghi `record_id` từ body, user id từ JWT claim                          |
 
-### 7.2. Vận hành (6B)
+### 7.2. Vận hành
 
 | Hạng mục         | Thành phần                                                                  |
 | ---------------- | --------------------------------------------------------------------------- |
 | Dispatcher       | `DispatcherService` — tạo chuyến, gán đơn, bản đồ audit                   |
 | Báo cáo          | `ReportService` — 6 báo cáo: doanh thu, tỉ lệ giao, aging nợ, hàng trả về, tiền mặt theo ca, tồn kho thấp |
 | Đối soát EOD    | `EodReconciliationService` + 2 bảng `tenant.eod_reconciliation*`             |
-| Xuất Excel       | `Phase6ExportService` (ClosedXML) — 8 loại báo cáo `.xlsx`                   |
+| Xuất Excel       | `OperationsExportService` (ClosedXML) — 8 loại báo cáo `.xlsx`                   |
 
-### 7.3. Hardening & DevOps (6C)
+### 7.3. Hardening & DevOps
 
 | Hạng mục         | Thành phần                                                                |
 | ---------------- | --------------------------------------------------------------------------- |
@@ -198,7 +198,7 @@ Phase 6 bổ sung 3 nhóm năng lực, tất cả **nằm trong `Pack/`**:
 | Health check sâu | `GET /api/health/deep`                                                     |
 | Backup tự động   | `scripts/09_backup_db.ps1` (Express-safe, `RESTORE HEADERONLY` verify, xoay vòng) |
 
-### 7.4. Chạy kiểm tra Phase 6
+### 7.4. Chạy kiểm tra
 
 ```powershell
 # Verify thống nhất (54 check)
@@ -212,4 +212,4 @@ cd erp-fmcg-backend-csharp
 dotnet test tests/ERP.FMC.Tests
 ```
 
-Xem báo cáo đầy đủ: [`../PHASE_6_REPORT.md`](../PHASE_6_REPORT.md)
+Xem báo cáo đầy đủ: [`erp-fmcg-database/README.md`](erp-fmcg-database/README.md)

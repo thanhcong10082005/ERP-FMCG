@@ -57,7 +57,7 @@ public class HealthController : ControllerBase
     }
 
     // ===================================================================
-    // ★ PHASE 6C.8 — HEALTH CHECK SÂU (deep health check)
+    // HEALTH CHECK SÂU (deep health check)
     // -------------------------------------------------------------------
     // Health check cơ bản chỉ kiểm tra "DB có kết nối được không".
     // Nó KHÔNG phát hiện được các lỗi đã xảy ra thật:
@@ -102,7 +102,7 @@ public class HealthController : ControllerBase
             {
                 name = $"table_tenant.{table}",
                 status = exists ? "PASS" : "FAIL",
-                detail = exists ? "Tồn tại" : "THIẾU BẢNG — cần chạy migration Phase 6"
+                detail = exists ? "Tồn tại" : "THIẾU BẢNG — cần chạy migration"
             });
         }
 
@@ -121,7 +121,7 @@ public class HealthController : ControllerBase
                 NewValues = "{}",
                 Source = "HEALTHCHECK",
                 RequestId = Guid.NewGuid().ToString(),
-                Notes = "Phase 6C.8 deep health check probe (tự xoá)",
+                Notes = "Deep health check probe (tự xoá)",
                 CreatedAt = DateTime.UtcNow,
             };
             _db.AuditLogs.Add(probe);

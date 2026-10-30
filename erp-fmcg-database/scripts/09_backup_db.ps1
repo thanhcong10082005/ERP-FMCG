@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    ★ PHASE 6C.9 — Sao luu tu dong ERP_FMCG (BACKUP DATABASE ... WITH COMPRESS, COPY_ONLY).
+    Sao luu tu dong ERP_FMCG (BACKUP DATABASE ... WITH COMPRESS, COPY_ONLY).
 
 .DESCRIPTION
     Script "03_clean_db.ps1" hien tai chi lam chuc nang CLEAN (xoa du lieu).
-    Phase 6C.9 yeu cau them script BACKUP + lich tu dong.
+    Can them script BACKUP + lich tu dong.
 
     Tinh nang:
       1. Sao luu FULL database ERP_FMCG ra file .bak (COMPRESS + COPY_ONLY).
@@ -22,7 +22,7 @@
 
     Khoi phuc:
         sqlcmd -S ".\SQLEXPRESS" -E -Q "RESTORE DATABASE ERP_FMCG FROM DISK = 'D:\...bak' WITH MOVE ..."
-      (xem file README hoac runbook trong PHASE_6_REPORT.md)
+      (xem file README hoac runbook trong erp-fmcg-database\README.md)
 
 .PARAMETER Server
     SQL Server instance. Mac dinh: .\SQLEXPRESS

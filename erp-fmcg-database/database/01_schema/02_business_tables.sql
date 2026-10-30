@@ -136,7 +136,7 @@ CREATE TABLE tenant.sales_orders (
     -- Driver App hiển thị "Công nợ cũ" cần thu cho khách này
     old_debt_amount     DECIMAL(15,2) NOT NULL DEFAULT 0,
 
-    -- ★ Phase 5A.2 (DB-C11): retry logic (chuyển từ Postgres v13_1_3)
+    -- retry logic (chuyển từ Postgres v13_1_3)
     -- failure_count >= 3 -> tự động CANCELLED
     failure_count       INT NOT NULL DEFAULT 0,
     failure_reason      VARCHAR(50) NULL

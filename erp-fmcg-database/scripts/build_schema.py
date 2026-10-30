@@ -21,7 +21,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 PACK_ROOT = Path(__file__).resolve().parent.parent
 
 # Thu muc nguon: uu tien bien moi truong, sau do thu muc "database/01_schema"
-# nam trong pack root. Tu thoi diem Phase 5, schema nguon da nam hoan toan
+# nam trong pack root. Schema nguon da nam hoan toan
 # trong Pack/ -> khong con phu thuoc thu muc ngoai.
 _env_src = os.environ.get("ERP_FMCG_SCHEMA_SRC")
 if _env_src:
@@ -72,7 +72,7 @@ BANNER = """-- =================================================================
 --   4. 03_staging_tables.sql   - 4 bảng staging (import pipeline)
 --   5. 04_triggers.sql         - trigger tồn kho
 --   6. 06_temporal_audit.sql   - audit_logs + views
---   7. 07_delivery_tables.sql  - 5 bảng nghiệp vụ giao hàng (Phase 5A.1)
+--   7. 07_delivery_tables.sql  - 5 bảng nghiệp vụ giao hàng
 --   8. 05_seed_data.sql        - seed nền tảng
 -- ===================================================================
 

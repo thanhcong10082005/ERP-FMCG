@@ -5,9 +5,9 @@ using Xunit;
 namespace ERP.FMC.Tests;
 
 // ===================================================================
-// ★ PHASE 6A.1 — TEST CHỐNG GIAN LẬN SERVER-SIDE
+// TEST CHỐNG GIAN LẬN SERVER-SIDE
 // -------------------------------------------------------------------
-// Acceptance 6A (từ PHASE_5_6_INTEGRATION_PLAN.md):
+// Acceptance (theo đặc tả tích hợp):
 //   [ ] POD ngoài khung 5h–22h        → 400 OUT_OF_DELIVERY_WINDOW
 //   [ ] POD cách partner 250m          → 400 GPS_GATE_FAILED
 //   [ ] gps_captured_at lệch > 15 phút → cảnh báo TIMESTAMP_MISMATCH

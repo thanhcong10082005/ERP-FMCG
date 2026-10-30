@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace ERP.FMC.Application.DTOs;
 
 // ===================================================================
-// PHASE 6B.2 — DTO BÁO CÁO VẬN HÀNH
+// DTO BÁO CÁO VẬN HÀNH
 // -------------------------------------------------------------------
 // 6 báo cáo mà dispatcher/quản lý cần hằng ngày:
 //   1. Doanh thu theo tuyến

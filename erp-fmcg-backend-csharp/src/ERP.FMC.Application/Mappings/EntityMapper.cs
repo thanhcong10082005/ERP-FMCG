@@ -4,7 +4,7 @@ using ERP.FMC.Domain.Entities;
 namespace ERP.FMC.Application.Mappings;
 
 // ===================================================================
-// ★ PHASE 6C — THAY THẾ AutoMapper BẰNG MAPPING THỦ CÔNG
+// THAY THẾ AutoMapper BẰNG MAPPING THỦ CÔNG
 // -------------------------------------------------------------------
 // Lý do (6C — NuGet hardening):
 //   AutoMapper 12.0.1 có lỗ hổng DoS (GHSA-rvv3-g6hj-g44x) — đệ quy

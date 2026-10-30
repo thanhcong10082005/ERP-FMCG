@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
- ERP-FMCG - AP DUNG MIGRATION PHASE 6 (09_phase6_dispatcher_eod.sql)
+ ERP-FMCG - AP DUNG MIGRATION DISPATCHER/EOD (09_dispatcher_eod.sql)
 ================================================================================
  Script nay:
-   1. Doc file `database/02_migration/09_phase6_dispatcher_eod.sql`
+   1. Doc file `database/02_migration/09_dispatcher_eod.sql`
    2. Tach thanh cac batch (theo GO) va chay tuan tu tren SQL Server
    3. In ket qua verify: bang EOD da tao, CHECK constraint da co, trigger con song
 
@@ -16,8 +16,8 @@
 
  Usage
  -----
-   python 05_apply_phase6_migration.py
-   python 05_apply_phase6_migration.py --server ".\\SQLEXPRESS"
+   python 05_apply_migration.py
+   python 05_apply_migration.py --server ".\\SQLEXPRESS"
 
  Ket qua mong doi
  ---------------
@@ -51,7 +51,7 @@ except ImportError:  # pragma: no cover
     sys.exit(2)
 
 REPO = Path(__file__).resolve().parents[1]
-MIGRATION_FILE = REPO / "database" / "02_migration" / "09_phase6_dispatcher_eod.sql"
+MIGRATION_FILE = REPO / "database" / "02_migration" / "09_dispatcher_eod.sql"
 
 DEFAULT_SERVER = os.environ.get("ERP_FMCG_SERVER", r".\SQLEXPRESS")
 DEFAULT_DB = os.environ.get("ERP_FMCG_DB", "ERP_FMCG")
@@ -137,7 +137,7 @@ def verify(conn) -> tuple[int, int]:
     passed = failed = 0
     print()
     print("=" * 70)
-    print("KET QUA VERIFY MIGRATION PHASE 6")
+    print("KET QUA VERIFY MIGRATION DISPATCHER/EOD")
     print("=" * 70)
 
     for label, sql in VERIFY:
@@ -151,7 +151,7 @@ def verify(conn) -> tuple[int, int]:
                 print(f"  {RED}[FAIL]{RESET} {label}: khong tim thay")
                 failed += 1
         except Exception as exc:  # noqa: BLE001
-            print(f"  {RED}[FAIL]{RESET} {label}: {exc}")
+            print(f"  {RED}[FAIL]{RESET} {label}: {exc}", file=sys.stderr)
             failed += 1
 
     # So dong EOD (bang moi => 0)
@@ -170,7 +170,7 @@ def verify(conn) -> tuple[int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Ap dung migration Phase 6")
+    parser = argparse.ArgumentParser(description="Ap dung migration dispatcher/EOD")
     parser.add_argument("--server", default=DEFAULT_SERVER)
     parser.add_argument("--database", default=DEFAULT_DB)
     args = parser.parse_args()
@@ -193,9 +193,9 @@ def main() -> int:
 
     print()
     if failed == 0:
-        print(f"{GREEN}[OK] PHASE 6 MIGRATION THANH CONG{RESET}")
+        print(f"{GREEN}[OK] MIGRATION THANH CONG{RESET}")
         return 0
-    print(f"{RED}[FAIL] PHASE 6 MIGRATION CO {failed} CHECK FAIL{RESET}")
+    print(f"{RED}[FAIL] MIGRATION CO {failed} CHECK FAIL{RESET}")
     return 1
 
 

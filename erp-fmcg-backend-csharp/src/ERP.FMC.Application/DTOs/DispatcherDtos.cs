@@ -3,10 +3,10 @@ using System.Text.Json.Serialization;
 namespace ERP.FMC.Application.DTOs;
 
 // ===================================================================
-// PHASE 6B — DTO cho DISPATCHER
+// — DTO cho DISPATCHER
 // -------------------------------------------------------------------
 // Dispatcher (điều phối) cần nhìn được TOÀN BỘ chuyến xe, không chỉ
-// chuyến của mình. Đây là lớp nghiệp vụ mới hoàn toàn so với Phase 5.
+// chuyến của mình. Đây là lớp nghiệp vụ mới hoàn toàn.
 // ===================================================================
 
 /// <summary>Yêu cầu tạo chuyến xe (dispatcher).</summary>
@@ -88,8 +88,8 @@ public class PodDetailDto
     [JsonPropertyName("total_collected")]
     public decimal TotalCollected { get; set; }
 
-    // ★ PHASE 6B.5 — chi tiết 6 ô thanh toán.
-    //   Trước Phase 6B.5, `PodDetailDto` chỉ có `total_collected` (tổng) —
+    // chi tiết 6 ô thanh toán.
+    //   Trước đây, `PodDetailDto` chỉ có `total_collected` (tổng) —
     //   dispatcher/Kế toán KHÔNG biết bao nhiêu là tiền mặt đơn mới, bao
     //   nhiêu là thu nợ cũ, bao nhiêu là ghi nợ -> không đối chiếu được
     //   với bảng công nợ, không xuất Excel được.
@@ -114,7 +114,7 @@ public class PodDetailDto
     [JsonPropertyName("failure_reason")]
     public string? FailureReason { get; set; }
 
-    /// <summary>★ 6B.3 — GPS để vẽ bản đồ audit.</summary>
+    /// <summary>GPS để vẽ bản đồ audit.</summary>
     [JsonPropertyName("delivery_latitude")]
     public double? DeliveryLatitude { get; set; }
 

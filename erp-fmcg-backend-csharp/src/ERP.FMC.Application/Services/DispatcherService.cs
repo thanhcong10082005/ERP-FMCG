@@ -6,9 +6,9 @@ using Microsoft.Extensions.Logging;
 namespace ERP.FMC.Application.Services;
 
 // ===================================================================
-// ★ PHASE 6B.1 — DỊCH VỤ QUẢN TRỊ CHUYẾN XE (DISPATCHER)
+// DỊCH VỤ QUẢN TRỊ CHUYẾN XE (DISPATCHER)
 // -------------------------------------------------------------------
-// Phase 5 chỉ có API cho TÀI XẾ (xem chuyến của mình). Dispatcher cần:
+// API cho TÀI XẾ chỉ xem chuyến của mình. Dispatcher cần:
 //   - Tạo chuyến, gán tài xế, gắn đơn hàng vào chuyến
 //   - Xem TẤT CẢ chuyến (toàn hệ thống)
 //   - Xem trip + POD + GPS (bản đồ audit)
@@ -253,7 +253,7 @@ public class DispatcherService : IDispatcherService
     }
 
     // -------------------------------------------------------------------
-    // ★ 6B.3 — Chi tiết chuyến đầy đủ (trip + POD + GPS)
+    // Chi tiết chuyến đầy đủ (trip + POD + GPS)
     // -------------------------------------------------------------------
     public async Task<TripFullDto> GetTripFullAsync(Guid tripId, CancellationToken ct = default)
     {
@@ -342,7 +342,7 @@ public class DispatcherService : IDispatcherService
             PartnerName = partnerMap.TryGetValue(p.PartnerId, out var pr) ? pr.PartnerName : null,
             DeliveryStatus = p.DeliveryStatus,
             TotalCollected = p.TotalCollected,
-            // ★ PHASE 6B.5 — đủ 6 ô thanh toán
+            // đủ 6 ô thanh toán
             NewOrderCash = p.NewOrderCash,
             NewOrderTransfer = p.NewOrderTransfer,
             NewOrderCredit = p.NewOrderCredit,

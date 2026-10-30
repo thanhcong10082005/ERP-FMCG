@@ -213,8 +213,14 @@ public class ImportService : IImportService
     {
         var rows = (await _uow.ImportStaging.FindAsync(s => s.JobId == jobId))
             .Take(takeCount).ToList();
+
+        // ImportError.StagingId la Guid? (co the NULL) -> bo dong loi khong gan
+        // staging nao truoc khi group, de key cua ToDictionary la Guid
+        // (non-nullable) va khop duoc voi ImportStaging.Id.
         var errors = (await _uow.ImportErrors.FindAsync(e => e.JobId == jobId))
-            .GroupBy(e => e.StagingId).ToDictionary(g => g.Key, g => g.ToList());
+            .Where(e => e.StagingId.HasValue)
+            .GroupBy(e => e.StagingId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         return rows.Select(r => new ImportStagingPreviewDto
         {
@@ -291,7 +297,7 @@ public class ImportService : IImportService
         return resolved;
     }
 
-    // ============ Phase 4 methods ============
+    // ============ Phương thức nền tảng dữ liệu ============
 
     public async Task<List<ImportHistoryDto>> GetImportHistoryAsync(
         string? importType = null, int limit = 50, CancellationToken ct = default)

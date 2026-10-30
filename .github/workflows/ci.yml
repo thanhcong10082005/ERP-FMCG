@@ -1,7 +1,7 @@
-name: CI — ERP FMCG (Phase 6C.1)
+name: CI — ERP FMCG
 
 # ===================================================================
-# ★ PHASE 6C.1 — CI/CD
+# CI/CD
 # -------------------------------------------------------------------
 # Pipeline:
 #   1. build_schema.py        -> 01_schema.sql phai khop file nguon
@@ -66,14 +66,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r erp-fmcg-database/requirements.txt
 
-      # --- 6C.3: 01_schema.sql la file SINH, phai khop file nguon ---
+      # 01_schema.sql la file SINH, phai khop file nguon
       - name: Build schema from sources
         working-directory: erp-fmcg-database
         run: |
           python scripts/build_schema.py
           git diff --exit-code -- 01_schema.sql
 
-      # --- 6C.3: 02_verify.sql la file SINH, phai khop registry ---
+      # 02_verify.sql la file SINH, phai khop registry
       - name: Build verify SQL from registry
         working-directory: erp-fmcg-database
         run: |
@@ -120,7 +120,7 @@ jobs:
         working-directory: erp-fmcg-backend-csharp
         run: dotnet restore ERP-FMCG.sln
 
-      # 6C.7 (security): khong duoc con package co advisory muc cao.
+      # Khong duoc con package co advisory muc cao.
       - name: Audit NuGet vulnerabilities
         working-directory: erp-fmcg-backend-csharp
         run: dotnet list ERP-FMCG.sln package --vulnerable --include-transitive
@@ -176,7 +176,7 @@ jobs:
         working-directory: erp-fmcg-driver
         run: npm run build
 
-      # 6C.7: build PWA phai sinh manifest + service worker.
+      # Build PWA phai sinh manifest + service worker.
       - name: Verify PWA artifacts
         working-directory: erp-fmcg-driver
         run: |
@@ -212,7 +212,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 6C.5 (risk #10): JWT signing key KHONG duoc commit len GitHub.
+      # (risk #10): JWT signing key KHONG duoc commit len GitHub.
       #   - appsettings.json        : "SigningKey" phai RONG
       #   - appsettings.Development : chi duoc phep chua key prefix "DEV-"
       #   - appsettings.Local/Prod  : KHONG duoc commit

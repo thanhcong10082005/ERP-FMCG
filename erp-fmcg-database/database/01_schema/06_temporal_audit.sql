@@ -13,7 +13,7 @@ SET NUMERIC_ROUNDABORT OFF;
 GO
 
 -- ===================================================================
--- PHASE 4: TEMPORAL TABLES + AUDIT LOG
+-- TEMPORAL TABLES + AUDIT LOG
 -- Bật System-Versioned Temporal Tables cho các bảng cần audit
 -- ===================================================================
 
@@ -222,5 +222,5 @@ FROM [tenant].[partners] FOR SYSTEM_TIME ALL p;
 GO
 
 PRINT '✅ Created vw_partner_history view';
-PRINT '✅ PHASE 4 setup completed successfully';
+PRINT '✅ TEMPORAL/AUDIT setup completed successfully';
 GO

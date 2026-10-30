@@ -1,7 +1,7 @@
 namespace ERP.FMC.Application.Services;
 
 // ===================================================================
-// ★ PHASE 6A.1 — Lỗi nghiệp vụ chống gian lận
+// Lỗi nghiệp vụ chống gian lận
 // -------------------------------------------------------------------
 // Tách riêng khỏi `ArgumentException` để client nhận được mã lỗi
 // CHI TIẾT (OUT_OF_DELIVERY_WINDOW / GPS_GATE_FAILED / BACKDATED_TRIP)

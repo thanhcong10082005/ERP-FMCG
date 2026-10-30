@@ -61,7 +61,7 @@ public class DeliveryPodService : IDeliveryPodService
     private const int TimeGuardToleranceMinutes = 30;
 
     /// <summary>
-    /// ★ PHASE 6A.1: bật/tắt chốt chặn cứng.
+    /// bật/tắt chốt chặn cứng.
     ///   - Production: TRUE  (chặn POD ngoài giờ / sai vị trí / giao lại chuyến cũ).
     ///   - Development/UAT: FALSE (chỉ ghi cảnh báo, không chặn nghiệp vụ).
     /// Đọc từ cấu hình <c>AntiFraud:Enforce</c>.
@@ -143,7 +143,7 @@ public class DeliveryPodService : IDeliveryPodService
         var partner = await _uow.Partners.GetByIdAsync(partnerId);
 
         // =============================================================
-        // ★ PHASE 6A.1 — CHỐNG GIAN LẬN SERVER-SIDE (3 chốt chặn)
+        // CHỐNG GIAN LẬN SERVER-SIDE (3 chốt chặn)
         //   Time-lock 05h–22h (giờ VN) | GPS Gate <= 100m | No Backdate
         //   Chạy TRƯỚC khi ghi bất cứ thứ gì ⇒ chặn sạch, không lọt
         //   trạng thái "nửa chừng".
@@ -198,10 +198,10 @@ public class DeliveryPodService : IDeliveryPodService
                 $"({salesOrder.TotalAmount:N0}).");
 
         // ---- 4. Kiểm tra công nợ cũ không vượt quá số nợ ----
-        // ★ 6A.5: KHÔNG throw — chỉ ghi cảnh báo, rồi clamp về 0 ở bước 11.
+        // KHÔNG throw — chỉ ghi cảnh báo, rồi clamp về 0 ở bước 11.
         //   Lý do: tài xế giao offline có thể chụp số liệu cũ; chặn cứng ở đây
         //   làm mất POD hợp lệ và khiến công nợ "đứng" không giảm được.
-        //   Việc chống gian lận thật sự nằm ở chốt chặn 6A.1 + rate limit 6C.4.
+        //   Việc chống gian lận thật sự nằm ở chốt chặn + rate limit.
         var oldDebtCollected = request.OldDebtCash + request.OldDebtTransfer;
         var partnerOldDebt = partner?.OldDebt ?? 0m;
         if (oldDebtCollected > partnerOldDebt + 1m)
@@ -247,7 +247,7 @@ public class DeliveryPodService : IDeliveryPodService
             CreatedBy = driverId,
         };
 
-        // ---- 6. GPS gate + time guard (★ PHASE 6A.1 — server-side) ----
+        // ---- 6. GPS gate + time guard (server-side) ----
         //   Kết quả đã được tính sẵn ở bước chống gian lận ở trên.
         pod.GpsGateResult = fraud.GpsGateResult;
         pod.GpsGateDistanceM = fraud.DistanceMeters ?? request.DistanceToPartnerM;
@@ -337,7 +337,7 @@ public class DeliveryPodService : IDeliveryPodService
             }
         }
 
-        // ---- 11. ★ PHASE 6A.5 — Cập nhật công nợ khách hàng ----
+        // ---- 11. Cập nhật công nợ khách hàng ----
         //   Công thức CHỐT (phương án (a)):
         //     old_debt     = old_debt - (old_cash + old_transfer + old_credit)
         //     current_debt = current_debt + new_credit + old_credit
@@ -406,13 +406,13 @@ public class DeliveryPodService : IDeliveryPodService
         }
         salesOrder.UpdatedAt = now;
 
-        // ---- 12b. ★ PHASE 6A.5 — Cập nhật tổng số trên chuyến ----
+        // ---- 12b. Cập nhật tổng số trên chuyến ----
         UpdateTripAggregates(trip, status, request);
 
-        // ---- 13. ★ PHASE 6A.4 — Ghi sổ kho (D7) ----
+        // ---- 13. Ghi sổ kho (D7) ----
         await WriteStockLedgerAsync(trip, salesOrder, pod, status);
 
-        // ---- 14. ★ PHASE 6A.2 — Lưu trong 1 TRANSACTION ----
+        // ---- 14. Lưu trong 1 TRANSACTION ----
         //    Toàn bộ: INSERT pod + UPDATE debt + UPDATE order + INSERT ledger
         //    phải là ATOMIC. Nếu ledger lỗi ⇒ rollback ⇒ công nợ không bị
         //    update dở (vẫn còn "nợ treo" của POD đã ghi).
@@ -425,7 +425,7 @@ public class DeliveryPodService : IDeliveryPodService
         }
         catch (Exception dupEx) when (IsUniqueViolation(dupEx))
         {
-            // 6A.2: race condition — 2 request cùng client_pod_id.
+            // Race condition — 2 request cùng client_pod_id.
             //   UNIQUE index UQ_delivery_pod_client bắt được ⇒ đọc lại POD cũ.
             await _uow.RollbackTransactionAsync();
 
@@ -506,7 +506,7 @@ public class DeliveryPodService : IDeliveryPodService
     // ===================================================================
 
     /// <summary>
-    /// ★ PHASE 6A.5 — cập nhật tổng số trên chuyến sau khi ghi POD.
+    /// cập nhật tổng số trên chuyến sau khi ghi POD.
     ///   delivered_count / failed_count / total_cash / total_transfer /
     ///   total_old_debt — dispatcher dùng để đối soát cuối ca.
     /// </summary>
@@ -527,7 +527,7 @@ public class DeliveryPodService : IDeliveryPodService
     }
 
     /// <summary>
-    /// ★ PHASE 6A.2 — nhận diện vi phạm UNIQUE constraint từ DbUpdateException.
+    /// nhận diện vi phạm UNIQUE constraint từ DbUpdateException.
     ///   SQL Server: error 2601 / 2627. Đây là lớp bảo vệ cuối cùng chống
     ///   double-POD khi 2 request cùng lúc tới (race condition).
     /// </summary>
@@ -658,7 +658,7 @@ public class DeliveryPodService : IDeliveryPodService
 
             var notes = $"POD {pod.Id} - {salesOrder.OrderNumber}";
 
-            // ★ 6A.4: cảnh báo khi trừ kho sẽ âm.
+            // Cảnh báo khi trừ kho sẽ âm.
             if (balance is not null && balance.OnHand - deliveredQty < 0)
             {
                 notes += $" | CANH_BAO_TON_AM: ton={balance.OnHand}, tru={deliveredQty}";

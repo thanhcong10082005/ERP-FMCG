@@ -9,49 +9,49 @@ using Microsoft.Extensions.Logging;
 namespace ERP.FMC.Infrastructure.Services;
 
 // ===================================================================
-// ★ PHASE 6B.5 — XUẤT EXCEL CHO BÁO CÁO VẬN HÀNH
+// XUẤT EXCEL CHO BÁO CÁO VẬN HÀNH
 // -------------------------------------------------------------------
 // SYMPTOM (triệu chứng):
 //   Dispatcher phải in báo cáo cuối ngày (POD theo chuyến, công nợ
-//   khách, tiền mặt theo ca) để nộp cho kế toán. Trước Phase 6B.5
+//   khách, tiền mặt theo ca) để nộp cho kế toán. Trước đây
 //   không có endpoint nào xuất được những báo cáo này -> phải chép tay
 //   từ màn hình, mỗi ca ~30-45 phút, sai số.
 //
 // ROOT CAUSE (nguyên nhân gốc):
-//   `ExportService` (Phase 4) chỉ hỗ trợ PARTNERS / PRODUCTS / ORDERS /
+//   `ExportService` chỉ hỗ trợ PARTNERS / PRODUCTS / ORDERS /
 //   INVENTORY / REVENUE — lấy dữ liệu từ các entity gốc.
-//   Phase 6B tạo 6 báo cáo vận hành MỚI (doanh thu theo tuyến, tỷ lệ
+//   vai tro tạo 6 báo cáo vận hành MỚI (doanh thu theo tuyến, tỷ lệ
 //   giao thành công, công nợ theo tuổi, hàng rớt, tiền mặt theo ca,
 //   tồn kho cảnh báo) + dữ liệu POD/EOD. Không có "adapter" nào đưa
 //   các báo cáo đó ra Excel.
 //
 // FIX (cách sửa):
-//   `Phase6ExportService` đặt cạnh `ExportService`, dùng CHUNG
+//   `OperationsExportService` đặt cạnh `ExportService`, dùng CHUNG
 //   `IReportService` / `IEodReconciliationService` / `IDispatcherService`
 //   để lấy dữ liệu đã chuẩn hoá, rồi ghi ra .xlsx bằng ClosedXML.
 //   Không query DB lần 2 -> báo cáo Excel luôn khớp với báo cáo
 //   trên màn hình (cùng 1 nguồn sự thật).
 //
 // PREVENTION (ngăn tái diễn):
-//   - Tất cả báo cáo Phase 6 đi qua `IReportService` -> 1 nguồn logic.
-//   - Test `Phase6ExportTests` assert file .xlsx tồn tại, có sheet
+//   - Tất cả báo cáo đi qua `IReportService` -> 1 nguồn logic.
+//   - Test `OperationsExportTests` assert file .xlsx tồn tại, có sheet
 //     đúng tên, và số dòng = số bản ghi.
-//   - Endpoint `/api/exports/phase6/{type}` trả về file để tải trực tiếp.
+//   - Endpoint `/api/exports/operations/{type}` trả về file để tải trực tiếp.
 // ===================================================================
 
-public class Phase6ExportService
+public class OperationsExportService
 {
     private readonly IReportService _reports;
     private readonly IEodReconciliationService _eod;
     private readonly IDispatcherService _dispatcher;
-    private readonly ILogger<Phase6ExportService> _logger;
+    private readonly ILogger<OperationsExportService> _logger;
     private readonly string _exportFolder;
 
-    public Phase6ExportService(
+    public OperationsExportService(
         IReportService reports,
         IEodReconciliationService eod,
         IDispatcherService dispatcher,
-        ILogger<Phase6ExportService> logger)
+        ILogger<OperationsExportService> logger)
     {
         _reports = reports;
         _eod = eod;
@@ -64,7 +64,7 @@ public class Phase6ExportService
     }
 
     /// <summary>
-    /// Xuất 1 báo cáo Phase 6 ra file .xlsx.
+    /// Xuất 1 báo cáo vận hành ra file .xlsx.
     /// </summary>
     /// <param name="exportType">
     /// REVENUE_BY_ROUTE | SUCCESS_RATE | DEBT_AGING | RETURNED_GOODS |
@@ -78,7 +78,7 @@ public class Phase6ExportService
         var sw = Stopwatch.StartNew();
         var type = (exportType ?? string.Empty).Trim().ToUpperInvariant();
 
-        var fileName = $"Phase6_{type}_{(request.FromDate?.ToString("yyyyMMdd") ?? "ALL")}" +
+        var fileName = $"Operations_{type}_{(request.FromDate?.ToString("yyyyMMdd") ?? "ALL")}" +
                        $"_to_{(request.ToDate?.ToString("yyyyMMdd") ?? "ALL")}" +
                        $"_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
         var filePath = Path.Combine(_exportFolder, fileName);
@@ -125,7 +125,7 @@ public class Phase6ExportService
         sw.Stop();
 
         _logger.LogInformation(
-            "Phase6 export: type={Type} file={File} rows={Rows} duration={Ms}ms",
+            "Operations export: type={Type} file={File} rows={Rows} duration={Ms}ms",
             type, fileName, rowCount, sw.ElapsedMilliseconds);
 
         return new ExportResultDto
@@ -138,7 +138,7 @@ public class Phase6ExportService
             RowCount = rowCount,
             CreatedAt = DateTime.UtcNow,
             Duration = sw.Elapsed,
-            DownloadUrl = $"/api/exports/phase6/download/{fileName}",
+            DownloadUrl = $"/api/exports/operations/download/{fileName}",
         };
     }
 

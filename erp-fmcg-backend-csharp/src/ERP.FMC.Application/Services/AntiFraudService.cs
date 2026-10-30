@@ -3,9 +3,9 @@ using ERP.FMC.Domain.Entities;
 namespace ERP.FMC.Application.Services;
 
 // ===================================================================
-// ★ PHASE 6A.1 — CHỐNG GIAN LẬN SERVER-SIDE
+// CHỐNG GIAN LẬN SERVER-SIDE
 // -------------------------------------------------------------------
-// Đưa 3 chốt chặn từ client (Phase 5C.7) lên SERVER.
+// Đưa 3 chốt chặn từ client lên SERVER.
 //
 // Lý do BẮT BUỘC:
 //   Client-side guard chỉ là "lớp UX". Tài xế có thể sửa JS, dùng

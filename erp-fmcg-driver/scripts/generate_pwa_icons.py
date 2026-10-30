@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-generate_pwa_icons.py — Sinh icon PWA cho Driver App (6C.7).
+generate_pwa_icons.py — Sinh icon PWA cho Driver App ().
 =============================================================
 Khong can thu vien ngoai: tao file PNG truc tiep bang zlib + struct
 (PNG 8-bit RGBA, vong bo ke 1 mau nen + hinh chu nhat + duong trang).

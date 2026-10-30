@@ -36,7 +36,7 @@ public class AppDbContext : DbContext
     public DbSet<PodItem> PodItems => Set<PodItem>();
     public DbSet<PodAttachment> PodAttachments => Set<PodAttachment>();
 
-    // ★ PHASE 6B.4 — đối soát cuối ngày (EOD)
+    // đối soát cuối ngày (EOD)
     public DbSet<EodReconciliation> EodReconciliations => Set<EodReconciliation>();
     public DbSet<EodReconciliationItem> EodReconciliationItems => Set<EodReconciliationItem>();
 

@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace ERP.FMC.Domain.Entities;
 
 // ===================================================================
-// ★ PHASE 6B.4 — BẢNG ĐỐI SOÁT CUỐI NGÀY (EOD)
+// BẢNG ĐỐI SOÁT CUỐI NGÀY (EOD)
 // -------------------------------------------------------------------
 // Nguồn: migration Postgres `v13_3__eod_reconciliation.sql` (hệ thống
 // NestJS đã có, MS SQL chưa). Driver App đã có màn hình `EODScreen`

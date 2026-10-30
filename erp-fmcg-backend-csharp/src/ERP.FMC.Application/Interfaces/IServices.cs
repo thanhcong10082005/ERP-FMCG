@@ -95,7 +95,7 @@ public interface IImportService
     Task<ImportErrorSummaryDto> GetErrorSummaryAsync(Guid jobId, CancellationToken ct = default);
     Task<int> ResolveErrorsAsync(Guid jobId, List<ErrorResolutionDto> resolutions, CancellationToken ct = default);
 
-    // Phase 4: Enhanced staging
+    // Nền tảng dữ liệu: Enhanced staging
     Task<List<ImportHistoryDto>> GetImportHistoryAsync(string? importType = null, int limit = 50, CancellationToken ct = default);
     Task<BatchResolveResultDto> BatchResolveErrorsAsync(Guid jobId, BatchResolveRequestDto request, CancellationToken ct = default);
     Task<Guid> ReImportAsync(ReImportRequestDto request, CancellationToken ct = default);
@@ -130,7 +130,7 @@ public interface ITemporalHistoryService
     IReadOnlyList<string> GetTemporalTables();
 }
 
-// Phase 5 interfaces - implemented in Infrastructure layer
+// Giao hàng interfaces - implemented in Infrastructure layer
 public interface IUatTestService
 {
     Task<TestSuiteRunDto> RunAllAsync(CancellationToken ct = default);
@@ -165,7 +165,7 @@ public interface IMonitoringService
     bool ResolveTicket(Guid ticketId, string resolutionNotes);
 }
 
-// DTOs for Phase 5 services
+// DTOs for giao hàng services
 public class MigrationResultDto
 {
     public bool Success { get; set; }

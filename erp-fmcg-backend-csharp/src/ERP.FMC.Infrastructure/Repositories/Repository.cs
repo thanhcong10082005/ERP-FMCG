@@ -93,7 +93,7 @@ public class UnitOfWork : IUnitOfWork
         DeliveryPods = new Repository<DeliveryPod>(_context);
         PodItems = new Repository<PodItem>(_context);
         PodAttachments = new Repository<PodAttachment>(_context);
-        // ★ PHASE 6B.4 — đối soát cuối ngày
+        // đối soát cuối ngày
         EodReconciliations = new Repository<EodReconciliation>(_context);
         EodReconciliationItems = new Repository<EodReconciliationItem>(_context);
     }
@@ -120,7 +120,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<DeliveryPod> DeliveryPods { get; }
     public IRepository<PodItem> PodItems { get; }
     public IRepository<PodAttachment> PodAttachments { get; }
-    // ★ PHASE 6B.4 — đối soát cuối ngày
+    // đối soát cuối ngày
     public IRepository<EodReconciliation> EodReconciliations { get; }
     public IRepository<EodReconciliationItem> EodReconciliationItems { get; }
 

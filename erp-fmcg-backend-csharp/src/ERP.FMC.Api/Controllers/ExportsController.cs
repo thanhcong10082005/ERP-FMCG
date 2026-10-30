@@ -13,19 +13,19 @@ public class ExportsController : ControllerBase
     private readonly ExportService _exportService;
     private readonly ILogger<ExportsController> _logger;
 
-    // ★ PHASE 6B.5 — xuất Excel cho báo cáo vận hành (8 loại).
-    private readonly Phase6ExportService _phase6Export;
-    private readonly ILogger<ExportsController> _loggerPhase6;
+    // xuất Excel cho báo cáo vận hành (8 loại).
+    private readonly OperationsExportService _operationsExport;
+    private readonly ILogger<ExportsController> _loggerOperations;
 
     public ExportsController(
         ExportService exportService,
-        Phase6ExportService phase6Export,
+        OperationsExportService operationsExport,
         ILogger<ExportsController> logger)
     {
         _exportService = exportService;
-        _phase6Export = phase6Export;
+        _operationsExport = operationsExport;
         _logger = logger;
-        _loggerPhase6 = logger;
+        _loggerOperations = logger;
     }
 
     /// <summary>
@@ -101,26 +101,26 @@ public class ExportsController : ControllerBase
     }
 
     // ===================================================================
-    // ★ PHASE 6B.5 — XUẤT EXCEL CHO BÁO CÁO VẬN HÀNH
+    // XUẤT EXCEL CHO BÁO CÁO VẬN HÀNH
     // -------------------------------------------------------------------
-    //   POST /api/exports/phase6/{type}  — sinh file .xlsx
-    //   GET  /api/exports/phase6/download/{fileName} — tai file
+    //   POST /api/exports/operations/{type}  — sinh file .xlsx
+    //   GET  /api/exports/operations/download/{fileName} — tai file
     //
     //   Type: REVENUE_BY_ROUTE | SUCCESS_RATE | DEBT_AGING | RETURNED_GOODS |
     //          CASH_BY_SHIFT | LOW_STOCK | POD_BY_TRIP | EOD_RECONCILIATION
     // ===================================================================
 
-    /// <summary>Sinh báo cáo Phase 6 ra Excel (.xlsx).</summary>
-    [HttpPost("phase6/{type}")]
+    /// <summary>Sinh báo cáo vận hành ra Excel (.xlsx).</summary>
+    [HttpPost("operations/{type}")]
     [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
-    public async Task<ActionResult<ExportResultDto>> ExportPhase6(
+    public async Task<ActionResult<ExportResultDto>> ExportOperations(
         string type,
         [FromBody] ExportRequestDto request,
         CancellationToken ct)
     {
         try
         {
-            var result = await _phase6Export.ExportAsync(type, request, ct);
+            var result = await _operationsExport.ExportAsync(type, request, ct);
             return Ok(result);
         }
         catch (NotSupportedException ex)
@@ -129,15 +129,15 @@ public class ExportsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _loggerPhase6.LogError(ex, "Phase6 export failed: {Type}", type);
+            _loggerOperations.LogError(ex, "Operations export failed: {Type}", type);
             return BadRequest(new { error = "EXPORT_FAILED", message = ex.Message });
         }
     }
 
-    /// <summary>Tai file Excel báo cáo Phase 6.</summary>
-    [HttpGet("phase6/download/{fileName}")]
+    /// <summary>Tai file Excel báo cáo vận hành.</summary>
+    [HttpGet("operations/download/{fileName}")]
     [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
-    public ActionResult DownloadPhase6(string fileName)
+    public ActionResult DownloadOperations(string fileName)
     {
         var exportFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -153,10 +153,10 @@ public class ExportsController : ControllerBase
             fileName);
     }
 
-    /// <summary>Danh sách loại báo cáo Phase 6 có thể xuất.</summary>
-    [HttpGet("phase6/types")]
+    /// <summary>Danh sách loại báo cáo vận hành có thể xuất.</summary>
+    [HttpGet("operations/types")]
     [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
-    public ActionResult<object> GetPhase6Types()
+    public ActionResult<object> GetOperationsTypes()
     {
         return Ok(new
         {

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace ERP.FMC.Application.Services;
 
 // ===================================================================
-// ★ PHASE 6B.2 — BÁO CÁO VẬN HÀNH
+// BÁO CÁO VẬN HÀNH
 // -------------------------------------------------------------------
 // 6 báo cáo cho dispatcher/quản lý:
 //   1. Doanh thu theo tuyến
@@ -17,7 +17,7 @@ namespace ERP.FMC.Application.Services;
 //   6. Tồn kho & cảnh báo dưới mức tối thiểu
 //
 // ★ Về hiệu năng:
-//   C-C7 (Phase 5) đã cảnh báo `SalesOrderService` nạp 49.844 orders +
+//   C-C7 đã cảnh báo `SalesOrderService` nạp 49.844 orders +
 //   176.332 items vào RAM mỗi request. Các báo cáo ở đây CŨNG nạp
 //   tương tự — nhưng đây là endpoint cho dispatcher, gọi 1-2 lần/ngày,
 //   không nằm trên đường giao hàng. Tuy vậy, dữ liệu được nạp MỘT LẦN

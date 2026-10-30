@@ -3,14 +3,14 @@
 """
 07_unified_verify.py — BỘ KIỂM TRA DUY NHẤT cho ERP_FMCG.
 ==============================================================
-★ PHASE 6C.3 — "Hợp nhất bộ verify"
+"Hợp nhất bộ verify"
 
 Trước đây có 2 bộ verify cạnh tranh nhau:
   - `02_verify.sql`            (26 check, viết tay trong SQL)
   - `scripts/02_verify_data.py` (22 check, viết tay trong Python)
   -> Lệch nhau, thêm check phải sửa 2 nơi, dễ quên.
 
-Sau Phase 6C.3:
+Sau khi hợp nhất:
   - `scripts/verify_registry.py`  = registry duy nhất (nguồn sự thật)
   - `scripts/07_unified_verify.py` = file này — chạy TẤT CẢ check
   - `scripts/build_verify_sql.py`  = sinh `02_verify.sql` từ registry
@@ -24,7 +24,7 @@ Exit code:
 Usage:
     python scripts/07_unified_verify.py
     python scripts/07_unified_verify.py --json
-    python scripts/07_unified_verify.py --nhom P6
+    python scripts/07_unified_verify.py --nhom OPS
     python scripts/07_unified_verify.py --output reports/
 """
 from __future__ import annotations
@@ -146,7 +146,7 @@ def write_markdown(path: Path, results: list[dict[str, Any]],
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="ERP-FMCG - bo kiem tra du lieu thong nhat (Phase 6C.3)")
+        description="ERP-FMCG - bo kiem tra du lieu thong nhat")
     ap.add_argument("--server", default=r".\SQLEXPRESS")
     ap.add_argument("--database", default="ERP_FMCG")
     ap.add_argument("--output", default=None,
@@ -154,7 +154,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true",
                     help="In ket qua ra stdout duy nhat dang JSON")
     ap.add_argument("--nhom", default=None,
-                    help="Chi chay 1 nhom check (A | D | P6)")
+                    help="Chi chay 1 nhom check (IMPORT | DELIVERY | OPS)")
     args = ap.parse_args()
 
     checks = by_nhom(args.nhom) if args.nhom else ALL_CHECKS

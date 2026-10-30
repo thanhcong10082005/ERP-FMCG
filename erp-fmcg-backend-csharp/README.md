@@ -152,7 +152,7 @@ Kỳ vọng: `Failed: 0, Passed: 44`.
 Danh sách đầy đủ (kèm schema request/response): mở `http://localhost:5000/swagger`.
 ---
 
-## 6.1. Nhóm endpoint Phase 5 (giao hàng)
+## 6.1. Nhóm endpoint giao hàng
 
 | Nhóm        | Tiền tố       | Mô tả                                          |
 | ----------- | ------------- | ---------------------------------------------- |
@@ -163,17 +163,17 @@ Danh sách đầy đủ (kèm schema request/response): mở `http://localhost:5
 
 ---
 
-## 6.2. Nhóm endpoint Phase 6
+## 6.2. Nhóm endpoint vận hành
 
 | Nhóm             | Tiền tố               | Mô tả                                                          |
 | ---------------- | --------------------- | -------------------------------------------------------------- |
 | Dispatcher       | `/api/dispatcher`     | Tạo chuyến, gán đơn, xem trip đầy đủ, đối soát EOD           |
 | Reports          | `/api/reports`        | Doanh thu, tỉ lệ giao thành công, aging công nợ, hàng trả về…   |
-| Exports (Excel)  | `/api/exports/phase6` | Xuất 8 loại báo cáo vận hành ra `.xlsx` (ClosedXML)             |
+| Exports (Excel)  | `/api/exports/operations` | Xuất 8 loại báo cáo vận hành ra `.xlsx` (ClosedXML)             |
 | Health check sâu | `/api/health/deep`    | Kiểm tra DB, bảng delivery, stock ledger, EOD                   |
 | Rate limiting    | `/api/sales/pod`      | 30 lần/phút / tài xế cho POD (chống spam)                      |
 
-### Chốt chặn anti-fraud (6A.1)
+### Chốt chặn anti-fraud
 
 `POST /api/sales/pod` **tự kiểm tra lại** dữ liệu client gửi lên:
 
@@ -239,12 +239,12 @@ erp-fmcg-backend-csharp/
 
 > ✅ Driver App trong pack này đã **có đủ route** `/api/auth/dev-login`,
 > `/api/sales/trips`, `/api/sales/pod` — được implement trong `ERP.FMC.Api`
-> (Phase 5B). Driver App dùng chung backend C#, không còn phụ thuộc
+> Driver App dùng chung backend C#, không còn phụ thuộc
 > backend NestJS cũ.
 
 ---
 
-## 10. Kiểm thử Phase 6
+## 10. Kiểm thử
 
 | Bộ kiểm thử                        | Lệnh                                         | Kết quả    |
 | ----------------------------------- | -------------------------------------------- | ---------- |

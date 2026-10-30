@@ -23,7 +23,7 @@ public class AuditLogMiddleware
         "/api/partners", "/api/products", "/api/sales-orders",
         "/api/categories", "/api/routes", "/api/warehouses",
         "/api/inventory", "/api/price-lists",
-        // ★ PHASE 6A.6: trước đây POST /api/sales/pod KHÔNG được ghi audit
+        // trước đây POST /api/sales/pod KHÔNG được ghi audit
         //   vì record_id lấy từ path (segments[2]) mà path này không có GUID.
         "/api/sales/pod", "/api/sales/trips", "/api/dispatcher"
     };
@@ -41,7 +41,7 @@ public class AuditLogMiddleware
 
         // Capture request body for POST/PUT/PATCH
         string? requestBody = null;
-        // ★ 6A.6: giảm ngưỡng 1MB -> 256KB.
+        // Giảm ngưỡng 1MB -> 256KB.
         //   POD có ảnh base64 2-5MB; buffer 1MB vào RAM cho mỗi request
         //   là rủi ro DoS. 256KB đủ cho payload audit (record_id, số tiền).
         if (_trackedMethods.Contains(context.Request.Method) &&
@@ -117,7 +117,7 @@ public class AuditLogMiddleware
             var method = context.Request.Method;
             var ip = context.Connection.RemoteIpAddress?.ToString();
 
-            // ★ PHASE 6A.6 — lấy record_id từ PATH trước, nếu không có thì
+            // lấy record_id từ PATH trước, nếu không có thì
             //   từ BODY (client_pod_id / trip_id / id).
             //   Lý do: `POST /api/sales/pod` có path KHÔNG chứa GUID
             //   (`/api/sales/pod`) ⇒ trước đây hàm `return` sớm ⇒
@@ -163,7 +163,7 @@ public class AuditLogMiddleware
                 action: action,
                 operation: $"{method.ToUpper()} {path}",
                 newValues: TryParseJson(requestBody),
-                // ★ 6A.6: lấy user_id từ JWT claim thay vì null cố định.
+                // Lấy user_id từ JWT claim thay vì null cố định.
                 userId: ExtractUserId(context),
                 source: "API",
                 requestId: requestId,
@@ -178,7 +178,7 @@ public class AuditLogMiddleware
     }
 
     /// <summary>
-    /// ★ 6A.6 — lấy user_id từ JWT claim.
+    /// Lấy user_id từ JWT claim.
     ///   Ưu tiên claim "sub" (JWT standard), sau đó NameIdentifier.
     /// </summary>
     private static Guid? ExtractUserId(HttpContext context)
@@ -190,7 +190,7 @@ public class AuditLogMiddleware
     }
 
     /// <summary>
-    /// ★ 6A.6 — lấy record_id từ body.
+    /// Lấy record_id từ body.
     ///   Thử lần lượt các khoá phổ biến: client_pod_id, trip_id, pod_id,
     ///   reconciliation_id, id, sales_order_id.
     /// </summary>
@@ -248,7 +248,7 @@ public class AuditLogMiddleware
             "warehouses" => "warehouses",
             "price-lists" => "price_lists",
             "inventory" => "inventory_balances",
-            // ★ 6A.6: endpoint mới của Phase 6
+            // endpoint mới của luồng vận hành
             "pod" => "delivery_pod",
             "pods" => "delivery_pod",
             "sales" => "delivery_trips",

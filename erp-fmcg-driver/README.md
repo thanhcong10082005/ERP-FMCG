@@ -14,7 +14,7 @@
 - **Thanh toán** (`PaymentScreen.tsx`) — 6 ô: tiền mặt / chuyển khoản / ghi nợ, cho cả đơn mới và công nợ cũ
 - **Offline-first** — dữ liệu lưu trong IndexedDB, `syncQueue.ts` tự đồng bộ khi có mạng
 - **End of Day** (`EODScreen.tsx`) — tổng kết, nộp tiền, đóng chuyến
-- **PWA thật** (6C.7) — cài được trên máy, mở offline được, có báo cáo trạng thái mạng
+- **PWA thật** () — cài được trên máy, mở offline được, có báo cáo trạng thái mạng
 
 ---
 
@@ -140,30 +140,30 @@ Luồng hoạt động:
 
 ## 8. Phạm vi bàn giao
 
-> ✅ **Phase 6 đã đóng giao kết nối giữa Driver App và backend C#.**
-> Các route dưới đây **ĐÃ CÓ** trong `ERP.FMC.Api` (Phase 5B + Phase 6A/6B).
+> ✅ **Đã đóng giao kết nối giữa Driver App và backend C#.**
+> Các route dưới đây **ĐÃ CÓ** trong `ERP.FMC.Api`.
 
 | Endpoint                             | Mục đích                               | Hiện thực tại                  |
 | ------------------------------------ | -------------------------------------- | ------------------------------ |
-| `POST /api/auth/dev-login`           | Đăng nhập tài xế (JWT)                 | `AuthController.cs` (5B.1)     |
-| `GET /api/sales/trips`               | Danh sách chuyến được phân công        | `Phase5Controllers.cs` (5B.5)  |
-| `GET /api/sales/trips/{id}`          | Chi tiết chuyến + các điểm giao        | `Phase5Controllers.cs` (5B.5)  |
-| `PUT /api/sales/trips/{id}/start`    | Bắt đầu chuyến                         | `Phase5Controllers.cs` (5B.5)  |
-| `PUT /api/sales/trips/{id}/complete` | Kết thúc chuyến                        | `Phase5Controllers.cs` (5B.5)  |
-| `POST /api/sales/pod`                | Ghi nhận giao hàng (Proof of Delivery) | `Phase5Controllers.cs` (5B.5)  |
+| `POST /api/auth/dev-login`           | Đăng nhập tài xế (JWT)                 | `AuthController.cs`      |
+| `GET /api/sales/trips`               | Danh sách chuyến được phân công        | `DriverSalesController.cs`  |
+| `GET /api/sales/trips/{id}`          | Chi tiết chuyến + các điểm giao        | `DriverSalesController.cs`  |
+| `PUT /api/sales/trips/{id}/start`    | Bắt đầu chuyến                         | `DriverSalesController.cs`  |
+| `PUT /api/sales/trips/{id}/complete` | Kết thúc chuyến                        | `DriverSalesController.cs`  |
+| `POST /api/sales/pod`                | Ghi nhận giao hàng (Proof of Delivery) | `DriverSalesController.cs`  |
 
-Ngoài ra backend C# còn cung cấp (Phase 6):
+Ngoài ra backend C# còn cung cấp:
 
 | Endpoint                             | Mục đích                                | Hiện thực tại                         |
 | ------------------------------------ | --------------------------------------- | ------------------------------------- |
-| `GET /api/health/deep`               | Health check sâu (DB, delivery, ledger)  | `HealthController.cs` (6C.8)          |
-| `POST /api/dispatcher/trips`         | Dispatcher tạo chuyến                   | `DispatcherController.cs` (6B.1)      |
-| `GET /api/dispatcher/trips/{id}/full` | Trip + POD + GPS (bản đồ audit)        | `DispatcherController.cs` (6B.1/6B.3) |
-| `GET /api/reports/*`                 | 6 báo cáo vận hành                      | `ReportController.cs` (6B.2)          |
-| `POST /api/dispatcher/trips/{id}/eod` | Đối soát cuối ngày                     | `DispatcherController.cs` (6B.4)      |
-| `POST /api/exports/phase6/{type}`    | Xuất Excel báo cáo vận hành             | `ExportsController.cs` (6B.5)         |
+| `GET /api/health/deep`               | Health check sâu (DB, delivery, ledger)  | `HealthController.cs`          |
+| `POST /api/dispatcher/trips`         | Dispatcher tạo chuyến                   | `DispatcherController.cs`      |
+| `GET /api/dispatcher/trips/{id}/full` | Trip + POD + GPS (bản đồ audit)        | `DispatcherController.cs` |
+| `GET /api/reports/*`                 | 6 báo cáo vận hành                      | `ReportController.cs`          |
+| `POST /api/dispatcher/trips/{id}/eod` | Đối soát cuối ngày                     | `DispatcherController.cs`      |
+| `POST /api/exports/operations/{type}`    | Xuất Excel báo cáo vận hành             | `ExportsController.cs`         |
 
-### 8.1. Chốt chặn server-side (6A.1)
+### 8.1. Chốt chặn server-side
 
 Backend C# **tự kiểm tra lại** mọi thứ client gửi lên, nên tài xế không thể
 vượt qua bằng cách sửa code trên máy:
@@ -177,7 +177,7 @@ vượt qua bằng cách sửa code trên máy:
 Ngoài ra `POST /api/sales/pod` có **idempotency** (`client_pod_id` UNIQUE): gửi
 lại cùng POD → server trả `200` với POD cũ, **không** tạo bản ghi trùng.
 
-### 8.2. PWA (6C.7)
+### 8.2. PWA
 
 App **cài được** và **mở offline được**:
 

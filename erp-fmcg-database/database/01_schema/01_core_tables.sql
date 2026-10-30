@@ -222,7 +222,7 @@ CREATE TABLE tenant.partners (
     old_debt          DECIMAL(15,2) NOT NULL DEFAULT 0,
     old_debt_date     DATE NULL,
 
-    -- ★ Phase 5A.2 (DB-C10): metadata geocoding
+    -- metadata geocoding
     -- LOW/MEDIUM/HIGH = auto-geocoder; MANUAL = admin/dispatcher sửa tay
     geocoding_confidence  VARCHAR(10) NULL
         CONSTRAINT CHK_partners_geocoding_conf CHECK (

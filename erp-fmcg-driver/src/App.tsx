@@ -68,7 +68,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {/* ★ PHASE 6C.7 — banner trạng thái PWA (update / offline / cài app) */}
+      {/* banner trạng thái PWA (update / offline / cài app) */}
       <PwaStatusBanner />
       <Routes>
         {/* Public */}

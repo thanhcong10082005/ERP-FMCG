@@ -1,15 +1,15 @@
 -- ===================================================================
--- PHASE 6 MIGRATION — 09_phase6_dispatcher_eod.sql
+-- MIGRATION DISPATCHER/EOD — 09_dispatcher_eod.sql
 -- -------------------------------------------------------------------
--- Ap dung cac thay doi DB cho Phase 6:
+-- Ap dung cac thay doi DB:
 --
---   6B.4  Tao bang tenant.eod_reconciliations + eod_reconciliation_items
+--   EOD      Tao bang tenant.eod_reconciliations + eod_reconciliation_items
 --         (Wizard doi soat cuoi ngay — chuyen tu Postgres v13_3__eod_reconciliation.sql)
 --
---   6C.6  Retention policy: temporal 24 thang cho sales_orders_history
+--   Retention policy: temporal 24 thang cho sales_orders_history
 --         + chi muc phuc vuc retention.
 --
---   6A.3  Dam bao trigger stock_ledger -> inventory_balances hoat dong
+--   Ton kho  Dam bao trigger stock_ledger -> inventory_balances hoat dong
 --         (MERGE) va co CHECK cho transaction_type.
 --
 -- IDEMPOTENT: chay lai nhieu lan deu an toan (IF OBJECT_ID / IF NOT EXISTS).
@@ -28,15 +28,15 @@ USE ERP_FMCG;
 GO
 
 -- ===================================================================
--- 6B.4 — BANG DOI SOAT CUOI NGAY (EOD)
+-- BANG DOI SOAT CUOI NGAY (EOD)
 -- ===================================================================
 
 IF OBJECT_ID('tenant.eod_reconciliations', 'U') IS NULL
 CREATE TABLE tenant.eod_reconciliations (
-    id                      UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    id                      UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID,
 
     trip_id                 UNIQUEIDENTIFIER NULL,
-    reconciliation_date     DATE NOT NULL DEFAULT CAST(GETDATE() AS DATE),
+    reconciliation_date     DATE NOT NULL DEFAULT CAST(GETDATE AS DATE),
 
     driver_id               UNIQUEIDENTIFIER NULL,
     driver_name             NVARCHAR(200) NULL,
@@ -47,7 +47,7 @@ CREATE TABLE tenant.eod_reconciliations (
     actual_cash             DECIMAL(15,2) NOT NULL DEFAULT 0,
     cash_difference         DECIMAL(15,2) NOT NULL DEFAULT 0,
     cash_variance_reason    NVARCHAR(500) NULL,
-    -- ★ CHECK: chi 3 gia tri hop le (acceptance 6B.4)
+    -- ★ CHECK: chi 3 gia tri hop le (acceptance)
     cash_variance_action    VARCHAR(50) NULL
         CONSTRAINT CK_eod_cash_action CHECK (
             cash_variance_action IS NULL OR
@@ -85,8 +85,8 @@ CREATE TABLE tenant.eod_reconciliations (
     approved_at             DATETIME2 NULL,
 
     created_by              UNIQUEIDENTIFIER NULL,
-    created_at              DATETIME2 NOT NULL DEFAULT GETDATE(),
-    updated_at              DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_at              DATETIME2 NOT NULL DEFAULT GETDATE,
+    updated_at              DATETIME2 NOT NULL DEFAULT GETDATE,
 
     CONSTRAINT FK_eod_trip FOREIGN KEY (trip_id)
         REFERENCES tenant.delivery_trips(id),
@@ -105,7 +105,7 @@ GO
 
 IF OBJECT_ID('tenant.eod_reconciliation_items', 'U') IS NULL
 CREATE TABLE tenant.eod_reconciliation_items (
-    id                      UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    id                      UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID,
 
     reconciliation_id       UNIQUEIDENTIFIER NOT NULL,
 
@@ -129,7 +129,7 @@ CREATE TABLE tenant.eod_reconciliation_items (
             reconciliation_status IN ('MATCHED','CASH_SHORT','CASH_OVER','ITEMS_SHORT','FULL_MATCH')
         ),
 
-    created_at              DATETIME2 NOT NULL DEFAULT GETDATE(),
+    created_at              DATETIME2 NOT NULL DEFAULT GETDATE,
 
     CONSTRAINT FK_eod_item_recon FOREIGN KEY (reconciliation_id)
         REFERENCES tenant.eod_reconciliations(id) ON DELETE CASCADE,
@@ -163,7 +163,7 @@ PRINT 'Da tao index cho eod_reconciliations';
 GO
 
 -- ===================================================================
--- 6C.6 — RETENTION POLICY (TEMPORAL 24 THANG)
+-- RETENTION POLICY (TEMPORAL 24 THANG)
 -- -------------------------------------------------------------------
 -- sales_orders_history sinh ra rat nhanh (moi don 1 ban ghi history).
 -- Chinh sach giu 24 thang.
@@ -184,7 +184,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @cutoff DATETIME2 = DATEADD(MONTH, -@MonthsToKeep, SYSUTCDATETIME());
+    DECLARE @cutoff DATETIME2 = DATEADD(MONTH, -@MonthsToKeep, SYSUTCDATETIME);
     DECLARE @deleted INT = 0;
 
     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sales_orders_history'
@@ -236,13 +236,13 @@ BEGIN
 END;
 GO
 
-PRINT 'Da tao ham dbo.fn_purge_sales_orders_history()';
+PRINT 'Da tao ham dbo.fn_purge_sales_orders_history';
 GO
 
 -- ===================================================================
--- 6A.3 — KIEM TRA TRIGGER stock_ledger -> inventory_balances
+-- KIEM TRA TRIGGER stock_ledger -> inventory_balances
 -- ===================================================================
--- Trigger ton tai (Phase 4/5) nhung can xac nhan no dang MERGE
+-- Trigger ton tai (/5) nhung can xac nhan no dang MERGE
 -- (khong phai INSERT-only) va co xu ly case san pham moi.
 -- ===================================================================
 
@@ -253,8 +253,7 @@ ELSE
 GO
 
 -- ===================================================================
--- 6A.2 — DAM BAO UNIQUE client_pod_id (idempotency)
--- ===================================================================
+-- DAM BAO UNIQUE client_pod_id -- ===================================================================
 IF NOT EXISTS (SELECT 1 FROM sys.indexes
                WHERE name = N'UQ_delivery_pod_client'
                  AND object_id = OBJECT_ID(N'tenant.delivery_pod'))
@@ -266,7 +265,7 @@ ELSE
 GO
 
 -- ===================================================================
--- 6A.1 — CHECK gia tri gps_gate_result / time_guard_result
+-- CHECK gia tri gps_gate_result / time_guard_result
 -- ===================================================================
 -- Do AntiFraudService sinh ra, danh sach gia tri phai khop.
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
@@ -298,10 +297,10 @@ GO
 -- ===================================================================
 PRINT '';
 PRINT '========================================';
-PRINT 'PHASE 6 MIGRATION (09_phase6) HOAN TAT';
+PRINT ' MIGRATION (09_dispatcher_eod) HOAN TAT';
 PRINT '  - tenant.eod_reconciliations          : OK';
 PRINT '  - tenant.eod_reconciliation_items     : OK';
 PRINT '  - CHECK constraint hanh dong EOD       : OK';
-PRINT '  - fn_purge_sales_orders_history()     : OK (retention 24 thang)';
+PRINT '  - fn_purge_sales_orders_history     : OK (24 thang)';
 PRINT '========================================';
 GO

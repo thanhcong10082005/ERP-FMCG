@@ -90,7 +90,7 @@ ELSE
 GO
 
 -- -------------------------------------------------------------------
--- 3. products: barcode + nguong ton kho (5A.3 / Q4)
+-- 3. products: barcode + nguong ton kho
 -- -------------------------------------------------------------------
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'tenant.products') AND name = N'barcode')
 BEGIN

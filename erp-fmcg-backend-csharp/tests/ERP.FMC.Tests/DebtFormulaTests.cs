@@ -10,9 +10,9 @@ using Xunit;
 namespace ERP.FMC.Tests;
 
 // ===================================================================
-// ★ PHASE 6A.5 — TEST CÔNG THỨC CÔNG NỢ
+// TEST CÔNG THỨC CÔNG NỢ
 // -------------------------------------------------------------------
-// Acceptance 6A.5 (từ plan):
+// Acceptance:
 //   [ ] POD DELIVERED với old_debt_cash = 50.000
 //         → partners.old_debt giảm 50.000, current_debt giảm 50.000
 //   [ ] POD DELIVERED với old_debt_credit = 30.000
@@ -139,7 +139,7 @@ public class DebtFormulaTests
         => _uow.Object.Partners.GetByIdAsync(partnerId).Result!;
 
     // ===================================================================
-    // Acceptance 6A.5
+    // Acceptance
     // ===================================================================
 
     [Fact]
@@ -220,7 +220,7 @@ public class DebtFormulaTests
     }
 
     // ===================================================================
-    // 6A.2 — IDEMPOTENCY
+    // IDEMPOTENCY
     // ===================================================================
 
     [Fact]

@@ -50,7 +50,7 @@ BEGIN
     WHEN MATCHED THEN
         UPDATE SET
             quantity_on_hand = target.quantity_on_hand + source.net_quantity,
-            -- ★ PHASE 6A.3 FIX: NULLIF(...,0) gây NULL cho average_cost (NOT NULL)
+            -- NULLIF(...,0) gây NULL cho average_cost (NOT NULL)
             --   khi tồn về đúng 0 → lỗi 515. Chỉ chia khi tồn còn > 0.
             average_cost = CASE
                 WHEN target.quantity_on_hand + source.net_quantity > 0

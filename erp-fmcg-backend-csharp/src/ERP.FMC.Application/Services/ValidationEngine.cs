@@ -46,26 +46,31 @@ public class ValidationEngine
         foreach (var rule in _rules[entityType])
         {
             var fieldName = rule.FieldName;
-            var rawValue = row.GetValueOrDefault(fieldName)?.Trim() ?? (row.GetValueOrDefault(fieldName.ToLower())?.Trim());
-            var value = rawValue;
+            var rawValue = row.GetValueOrDefault(fieldName)?.Trim()
+                           ?? row.GetValueOrDefault(fieldName.ToLower())?.Trim();
 
-            // Skip if not required and empty
-            if (!rule.IsRequired && string.IsNullOrWhiteSpace(value))
-                continue;
-
-            // Required check
-            if (rule.IsRequired && string.IsNullOrWhiteSpace(value))
+            // Gộp 2 nhánh "optional rỗng" và "required rỗng" để null-state
+            // của rawValue được compiler suy luận chắc chắn khác null
+            // từ đây trở đi.
+            if (string.IsNullOrWhiteSpace(rawValue))
             {
+                // Skip if not required and empty
+                if (!rule.IsRequired)
+                    continue;
+
+                // Required check
                 result.IsValid = false;
                 result.Errors.Add(new ValidationError
                 {
                     FieldName = fieldName,
-                    FieldValue = value,
+                    FieldValue = rawValue,
                     ErrorCode = "REQUIRED",
                     ErrorMessage = $"{rule.DisplayName ?? fieldName} không được để trống"
                 });
                 continue;
             }
+
+            var value = rawValue;
 
             // Convert
             object? converted = null;
@@ -93,7 +98,7 @@ public class ValidationEngine
                 {
                     FieldName = fieldName,
                     FieldValue = value,
-                    ErrorCode = customResult.ErrorCode,
+                    ErrorCode = customResult.ErrorCode ?? "VALIDATION_FAILED",
                     ErrorMessage = customResult.ErrorMessage ?? "Giá trị không hợp lệ",
                     SuggestedFix = customResult.SuggestedFix
                 });

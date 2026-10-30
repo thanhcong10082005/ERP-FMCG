@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace ERP.FMC.Application.Services;
 
 // ===================================================================
-// ★ PHASE 6B.4 — WIZARD ĐỐI SOÁT CUỐI NGÀY (EOD)
+// WIZARD ĐỐI SOÁT CUỐI NGÀY (EOD)
 // -------------------------------------------------------------------
 // Luồng nghiệp vụ:
 //   1. Dispatcher gọi POST /api/sales/trips/{id}/eod với `actual_cash`
@@ -17,7 +17,7 @@ namespace ERP.FMC.Application.Services;
 //   4. Tạo item cho từng đơn trong chuyến.
 //   5. Dispatcher duyệt: POST /api/sales/eod/{id}/approve → status = APPROVED.
 //
-// ★ CHECK constraint ở DB (6B.4 acceptance):
+// ★ CHECK constraint ở DB (acceptance):
 //   cash_variance_action chỉ nhận 3 giá trị hợp lệ.
 // ===================================================================
 
@@ -40,11 +40,11 @@ public interface IEodReconciliationService
 
 public class EodReconciliationService : IEodReconciliationService
 {
-    /// <summary>★ 6B.4: chỉ 3 hành động xử lý chênh lệch tiền mặt hợp lệ.</summary>
+    /// <summary>Chỉ 3 hành động xử lý chênh lệch tiền mặt hợp lệ.</summary>
     private static readonly string[] ValidCashActions =
         { "DRIVER_REIMBURSE", "SUSPEND_DEBT", "WRITE_OFF" };
 
-    /// <summary>★ 6B.4: chỉ 3 hành động xử lý chênh lệch hàng hóa hợp lệ.</summary>
+    /// <summary>Chỉ 3 hành động xử lý chênh lệch hàng hóa hợp lệ.</summary>
     private static readonly string[] ValidItemsActions =
         { "DRIVER_COMPENSATE", "RETURN_TO_STOCK", "WRITE_OFF" };
 

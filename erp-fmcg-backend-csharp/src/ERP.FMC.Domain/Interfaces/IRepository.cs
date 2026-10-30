@@ -47,7 +47,7 @@ public interface IUnitOfWork : IDisposable
     IRepository<Entities.DeliveryPod> DeliveryPods { get; }
     IRepository<Entities.PodItem> PodItems { get; }
     IRepository<Entities.PodAttachment> PodAttachments { get; }
-    // ★ PHASE 6B.4 — đối soát cuối ngày
+    // đối soát cuối ngày
     IRepository<Entities.EodReconciliation> EodReconciliations { get; }
     IRepository<Entities.EodReconciliationItem> EodReconciliationItems { get; }
     Task<int> SaveChangesAsync();

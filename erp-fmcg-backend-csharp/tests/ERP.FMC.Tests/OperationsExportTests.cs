@@ -8,10 +8,10 @@ using Xunit;
 namespace ERP.FMC.Tests;
 
 // ===================================================================
-// ★ PHASE 6B.5 — TEST XUẤT EXCEL BÁO CÁO VẬN HÀNH
+// TEST XUẤT EXCEL BÁO CÁO VẬN HÀNH
 // -------------------------------------------------------------------
 // Mục tiêu:
-//   1. Mỗi loại báo cáo Phase 6 sinh được file .xlsx thật.
+//   1. Mỗi loại báo cáo vận hành sinh được file .xlsx thật.
 //   2. File có đúng tên sheet kỳ vọng.
 //   3. Số dòng dữ liệu = số bản ghi mà `IReportService` trả về
 //      (Excel và màn hình phải khớp — cùng 1 nguồn sự thật).
@@ -24,9 +24,9 @@ namespace ERP.FMC.Tests;
 //   thuoc moi truong.
 // ===================================================================
 
-public class Phase6ExportTests
+public class OperationsExportTests
 {
-    private static Phase6ExportService BuildService(
+    private static OperationsExportService BuildService(
         IReadOnlyList<RevenueByRouteDto>? revenue = null,
         IReadOnlyList<DeliverySuccessRateDto>? success = null,
         IReadOnlyList<DebtAgingDto>? aging = null,
@@ -63,9 +63,9 @@ public class Phase6ExportTests
                 It.IsAny<string?>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<DeliveryTripDto>());
 
-        return new Phase6ExportService(
+        return new OperationsExportService(
             reports.Object, eodSvc.Object, dispatcher.Object,
-            NullLogger<Phase6ExportService>.Instance);
+            NullLogger<OperationsExportService>.Instance);
     }
 
     private static ExportRequestDto Request() => new()

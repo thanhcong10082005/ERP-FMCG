@@ -3,13 +3,13 @@
 """
 02_verify_data.py — WRAPPER MỎNG quanh bộ verify thống nhất.
 
-★ PHASE 6C.3 — "Hợp nhất bộ verify"
+"Hợp nhất bộ verify"
 ───────────────────────────────────────────────────────────────────────────
-TRƯỚC Phase 6C.3:
+TRƯỚC:
   File này tự chứa 22 check viết tay -> trùng lặp với `02_verify.sql`
   (26 check viết tay) -> 2 nguồn kiểm tra lệch nhau.
 
-SAU Phase 6C.3:
+SAU:
   - `scripts/verify_registry.py`  = registry DUY NHẤT (nguồn sự thật)
   - File này                    = wrapper, giữ nguyên CLI cũ để không
                                     phá script bàn giao / CI cũ.
@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Re-export để các script cũ import trực tiếp từ module này vẫn chạy.
-from verify_registry import ALL_CHECKS, CHECKS_A, Check, evaluate  # noqa: E402,F401
+from verify_registry import ALL_CHECKS, CHECKS_IMPORT, Check, evaluate  # noqa: E402,F401
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -49,7 +49,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true",
                     help="In ket qua ra stdout duy nhat dang JSON")
     ap.add_argument("--nhom", default=None,
-                    help="Chi chay 1 nhom check (A | D | P6)")
+                    help="Chi chay 1 nhom check (IMPORT | DELIVERY | OPS)")
     args = ap.parse_args()
 
     # Chuyển toàn bộ việc thực thi sang bộ verify thống nhất.

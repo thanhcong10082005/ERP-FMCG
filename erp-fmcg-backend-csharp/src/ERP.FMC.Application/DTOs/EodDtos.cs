@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace ERP.FMC.Application.DTOs;
 
 // ===================================================================
-// PHASE 6B.4 — WIZARD ĐỐI SOÁT CUỐI NGÀY (EOD)
+// WIZARD ĐỐI SOÁT CUỐI NGÀY (EOD)
 // -------------------------------------------------------------------
 // Nguồn: migration Postgres `v13_3__eod_reconciliation.sql` — hệ thống
 // NestJS đã có nhưng MS SQL chưa. Driver App có màn hình `EODScreen`
