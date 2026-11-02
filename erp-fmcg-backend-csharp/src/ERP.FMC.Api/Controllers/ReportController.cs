@@ -20,7 +20,7 @@ namespace ERP.FMC.Api.Controllers;
 [ApiController]
 [Route("api/reports")]
 [Produces("application/json")]
-[Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+[Authorize(Policy = "ReportingRole")]
 public class ReportController : ControllerBase
 {
     private readonly IReportService _reports;

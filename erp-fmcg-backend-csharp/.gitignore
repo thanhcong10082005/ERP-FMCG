@@ -37,6 +37,10 @@ dist/
 *.log
 logs/
 
+# ===== Test artifacts =====
+# Manifest id do e2e_smoke_test.py ghi ra (dung cho cleanup) — KHÔNG commit.
+.e2e_manifest.json
+
 # ===== OS =====
 .DS_Store
 Thumbs.db

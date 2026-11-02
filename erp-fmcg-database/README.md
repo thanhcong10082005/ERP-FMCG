@@ -24,10 +24,11 @@ Pack/erp-fmcg-database/
 │   ├── 04_verify_pod_idempotency.py# Kiểm tra idempotency POD
 │   ├── 05_apply_migration.py       # Áp dụng migration dispatcher/EOD
 │   ├── 06_seed_opening_stock.py    # Tạo opening balance stock ledger
-│   ├── 07_unified_verify.py        # ★ Verify thống nhất 54 check
+│   ├── 07_unified_verify.py        # ★ Verify thống nhất 56 check
 │   ├── 08_data_regression.py       # ★ Hash regression dữ liệu
 │   ├── 09_backup_db.ps1            # ★ Backup tự động + verify
-│   ├── verify_registry.py          # ★ Nguồn sự thật 54 check
+│   ├── 10_cleanup_e2e_data.py      # ★ Dọn dữ liệu test E2E (tự động)
+│   ├── verify_registry.py          # ★ Nguồn sự thật 56 check
 │   ├── build_schema.py             # Sinh lại 01_schema.sql từ file nguồn
 │   └── build_verify_sql.py         # Sinh lại 02_verify.sql từ registry
 └── migration_data/
@@ -202,6 +203,8 @@ Dry-run mất **~40 giây** cho 177.631 dòng và cho kết quả **giống hệ
 | `database/02_migration/08_user_phone.sql` | Thêm `phone` cho `user_accounts`                        |
 | `database/02_migration/09_dispatcher_eod.sql` | Bảng dispatcher, EOD reconciliation, index báo cáo |
 | `database/02_migration/10_stock_trigger_fix.sql` | Sửa trigger stock ledger + CHECK `average_cost >= 0` |
+| `database/02_migration/11_audit_operation_length.sql` | Nới độ dài cột `operation` của `audit_logs` |
+| `database/02_migration/12_stock_non_negative.sql` | **Chặn tồn kho âm** — CHECK `quantity_on_hand >= 0` + trigger RAISE ERROR |
 
 Áp dụng lên DB đang chạy:
 
@@ -215,7 +218,7 @@ Tạo opening balance tồn kho (nếu tồn kho âm do lịch sử import):
 python scripts\06_seed_opening_stock.py
 ```
 
-### 7.2. Verify thống nhất (54 check)
+### 7.2. Verify thống nhất (56 check)
 
 `verify_registry.py` là **nguồn sự thật** duy nhất. Từ đó sinh ra:
 
@@ -239,6 +242,34 @@ python scripts\08_data_regression.py --check    # so với baseline
 Tính SHA-256 theo chunk cho `sales_orders`, `sales_order_items`, `partners`,
 `products`, `stock_ledger`, `inventory_balances`, `delivery_pods` — phát hiện hồi quy
 khi ai đó sửa dữ liệu ngoài ý muốn.
+
+### 7.3.1 Dọn dữ liệu test E2E
+
+`e2e_smoke_test.py` (backend) chạy trên **DB thật**, nên mỗi lần chạy để lại:
+POD, dòng `stock_ledger`, chuyến xe và sửa `paid_amount` của đơn hàng. Nếu
+không dọn, `08_data_regression.py --check` sẽ FAIL và dữ liệu nghiệp vụ bị nhiễm.
+
+Script `10_cleanup_e2e_data.py` khôi phục DB về đúng trạng thái baseline:
+
+```powershell
+python scripts\10_cleanup_e2e_data.py --dry-run   # xem trước
+python scripts\10_cleanup_e2e_data.py             # dọn thật
+```
+
+| Bước | Hành động |
+| ---- | --------- |
+| 1 | Xoá `stock_ledger` thuộc POD test (theo `notes` chứa POD id) |
+| 2 | Xoá `delivery_pod` + `pod_items` + `pod_attachments` |
+| 3 | Khôi phục `sales_orders.paid_amount = 0`, `payment_status = 'UNPAID'` |
+| 4 | Xoá `delivery_trip_orders` + `delivery_trips` của E2E |
+| 5 | Tính lại `inventory_balances` từ `stock_ledger` (trigger chỉ chạy AFTER INSERT) |
+
+> ⚠️ Chỉ xoá bản ghi có dấu hiệu test (`notes`/`recipient_name` chứa "e2e",
+> `vehicle_plate = 'E2E-TEST'`, `notes` chứa `TON_AM_GIAI_QUYET`). Đơn hàng
+> và ledger giao hàng thật **không bị đụng tới**.
+
+`e2e_smoke_test.py` tự gọi script này ở cuối mỗi lần chạy, nên quy trình
+kiểm thử không còn để lại rác.
 
 ### 7.4. Backup tự động
 

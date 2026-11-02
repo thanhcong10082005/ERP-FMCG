@@ -77,8 +77,9 @@ public class SalesOrderService : ISalesOrderService
         if (!dto.Items.Any())
             throw new InvalidOperationException("Order must have at least one item");
 
-        await _uow.BeginTransactionAsync();
-        try
+        // Bọc trọn khối trong execution strategy: bắt buộc vì DbContext bật
+        // EnableRetryOnFailure nên không thể tự mở transaction thủ công.
+        return await _uow.ExecuteInTransactionAsync(async () =>
         {
             var order = new SalesOrder
             {
@@ -143,18 +144,12 @@ public class SalesOrderService : ISalesOrderService
                 await _uow.SalesOrderItems.AddAsync(it);
 
             await _uow.SaveChangesAsync();
-            await _uow.CommitTransactionAsync();
 
             _logger.LogInformation("Created order {Number} total={Total}", order.OrderNumber, order.TotalAmount);
 
             var result = await GetByIdAsync(order.Id);
             return result!;
-        }
-        catch
-        {
-            await _uow.RollbackTransactionAsync();
-            throw;
-        }
+        }, ct);
     }
 
     public async Task<SalesOrderDto?> UpdateAsync(Guid id, UpdateSalesOrderDto dto, CancellationToken ct = default)

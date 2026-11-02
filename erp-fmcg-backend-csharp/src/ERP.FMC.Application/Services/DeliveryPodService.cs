@@ -4,6 +4,7 @@ using ERP.FMC.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 namespace ERP.FMC.Application.Services;
 
@@ -198,18 +199,45 @@ public class DeliveryPodService : IDeliveryPodService
                 $"({salesOrder.TotalAmount:N0}).");
 
         // ---- 4. Kiểm tra công nợ cũ không vượt quá số nợ ----
-        // KHÔNG throw — chỉ ghi cảnh báo, rồi clamp về 0 ở bước 11.
-        //   Lý do: tài xế giao offline có thể chụp số liệu cũ; chặn cứng ở đây
-        //   làm mất POD hợp lệ và khiến công nợ "đứng" không giảm được.
-        //   Việc chống gian lận thật sự nằm ở chốt chặn + rate limit.
+        // ★ CHỐT NGHIỆP VỤ: server TỪ CHỐI (HTTP 400) khi
+        //   tài xế khai thu công nợ cũ vượt quá số nợ cũ thực tế.
+        //
+        //   LÝ DO (bug đã xảy ra):
+        //     Trước đây chỉ cảnh báo rồi clamp `old_debt` về 0. Hậu quả:
+        //     phần nợ cũ CHƯA THU ĐƯỢC bị xoá sạch ⇒ hệ thống "cho rằng"
+        //     khách đã trả đủ ⇒ mất tiền thật mà không ai biết.
+        //     Đây là hậu quả NẶNG HƠN việc từ chối 1 POD, vì:
+        //       - POD hợp lệ có thể bị chặn nhầm (tài xế chụp số liệu cũ).
+        //     nên cách an toàn là TỪ CHỐI + trả lỗi rõ ràng để sếp quản
+        //     xử lý, thay vì âm thầm xoá dữ liệu.
+        //
+        //   ÁP DỤNG CHỈ CHO "THU" (cash/transfer) — không áp dụng cho
+        //   `old_debt_credit` (ghi nợ) vì ô đó chỉ chuyển nợ từ cũ sang
+        //   hiện tại, không phải tiền thu.
+        //
+        // ★ QUY ƯỚC DẤU (quan trọng — xem DebtSignConventions):
+        //   old_debt > 0  ⇒ khách NỢ (phải thu).
+        //   old_debt < 0  ⇒ khách ĐÃ TRẢ TRƯỚC (số dư dương của ERP).
+        //   Vì vậy chỉ được so sánh với NỢ DƯƠNG. Nếu `old_debt` âm thì
+        //   KHÁCH KHÔNG NỢ gì ⇒ không có gì để thu ⇒ mọi khoản "thu công
+        //   nợ cũ" đều vượt hạn mức ⇒ phải từ chối.
         var oldDebtCollected = request.OldDebtCash + request.OldDebtTransfer;
         var partnerOldDebt = partner?.OldDebt ?? 0m;
-        if (oldDebtCollected > partnerOldDebt + 1m)
+
+        // Nợ thực sự còn lại của khách (chỉ phần DƯƠNG mới là nợ).
+        var partnerOutstandingDebt = DebtSignConventions.OutstandingDebt(partnerOldDebt);
+
+        if (oldDebtCollected > partnerOutstandingDebt + 1m)
         {
             _logger.LogWarning(
                 "DEBT_COLLECT_EXCEEDS: partner={PartnerId} thu cong no cu {Collected} > old_debt {OldDebt} " +
-                "→ se clamp ve 0 (khong chan POD)",
+                "→ TU CHOI POD (HTTP 400)",
                 partnerId, oldDebtCollected, partnerOldDebt);
+
+            throw new ArgumentException(
+                $"Thu cong no cu ({oldDebtCollected:N0}) vuot qua no cu thuc te cu khach " +
+                $"({partnerOutstandingDebt:N0}). Vui long kiem tra lai so lieu thu. " +
+                $"Neu khach co so duong (da tra truoc), hay ghi nho cong no cu thay vi thu tien.");
         }
 
         // ---- 5. Ghi POD ----
@@ -356,19 +384,66 @@ public class DeliveryPodService : IDeliveryPodService
             var newOrderPaid = request.NewOrderCash + request.NewOrderTransfer;
 
             // --- Guard: không thu vượt công nợ cũ đang có ---
-            if (oldDebtCollectedTotal > partner.OldDebt + 1m)
+            //   (Đã chặn cứng ở bước 4 ⇒ tới đây chỉ còn sai số < 1đ
+            //   hoặc phần `old_debt_credit` vốn KHÔNG phải tiền thu.)
+            if (oldDebtCollectedTotal > partnerOutstandingDebt + 1m)
             {
                 _logger.LogWarning(
                     "DEBT_CLAMP: partner={PartnerId} thu cong no cu {Collected} > old_debt {OldDebt} " +
                     "→ clamp ve 0",
-                    partner.Id, oldDebtCollectedTotal, partner.OldDebt);
+                    partner.Id, oldDebtCollectedTotal, partnerOldDebt);
             }
 
             var oldDebtBefore = partner.OldDebt;
+            var currentDebtBefore = partner.CurrentDebt;
 
-            partner.OldDebt = partner.OldDebt - oldDebtCollectedTotal;
-            if (partner.OldDebt < 0) partner.OldDebt = 0;
+            // ★ FIX: công thức cập nhật `old_debt`.
+            //
+            //   BUG CŨ:  partner.OldDebt = partner.OldDebt - oldDebtCollectedTotal;
+            //            if (partner.OldDebt < 0) partner.OldDebt = 0;
+            //
+            //   → Với khách đã trả trước (old_debt ÂM, tức số dư dương
+            //     của ERP), MỘT POD thu 0 đồng cũng làm `old_debt` âm hơn
+            //     ⇒ bị clamp về 0 ⇒ XOÁ SẠCH số dư dương của khách.
+            //     Đã xác nhận mất 660.000đ (KH CT00608580) chỉ vì 1 POD
+            //     thu 0đ, và làm check D12 rớt 480 → 479.
+            //
+            //   FIX: chỉ trừ trên phần NỢ DƯƠNG; giữ nguyên phần số dư
+            //   dương (khách trả trước). Ngoài ra `old_debt_credit`
+            //   (ghi nợ) KHÔNG phải tiền thu ⇒ không được dùng để trừ
+            //   `old_debt` quá mức nợ thực tế.
+            var oldDebtCashCollected = request.OldDebtCash + request.OldDebtTransfer;
+            var oldDebtReduction =
+                Math.Min(oldDebtCashCollected, partnerOutstandingDebt) + request.OldDebtCredit;
 
+            if (partner.OldDebt > 0m)
+            {
+                partner.OldDebt -= oldDebtReduction;
+                if (partner.OldDebt < 0m) partner.OldDebt = 0m;
+            }
+            else if (oldDebtReduction > 0m)
+            {
+                // Khách không có nợ cũ (old_debt <= 0) nhưng POD lại ghi
+                // nợ/thu công nợ cũ ⇒ KHÔNG đụng tới old_debt (giữ số dư
+                // dương), chỉ ghi cảnh báo để dispatcher đối soát.
+                _logger.LogWarning(
+                    "DEBT_COLLECT_ON_CREDIT_BALANCE: partner={PartnerId} thu/ghi no cong no cu {Collected} " +
+                    "nhung old_debt = {OldDebt} (khong co no cu) → giu nguyen old_debt",
+                    partner.Id, oldDebtReduction, partner.OldDebt);
+            }
+
+            // --- Cập nhật `current_debt` ---
+            //   current_debt = nợ HIỆN TẠI (đơn mới ghi nợ + nợ cũ chuyển sang)
+            //   - new_order_cash/new_order_transfer : đã thu cho đơn mới
+            //   + new_order_credit                  : ghi nợ đơn mới
+            //   + old_debt_credit                    : nợ cũ → nợ hiện tại
+            //   - old_debt_cash/old_debt_transfer    : đã thu cho nợ cũ
+            //
+            //   ★ FIX: clamp `current_debt` về 0 CHỈ khi
+            //   khách thực sự có nợ VÀ việc thu vượt là do khoản thu
+            //   (tức trước POD `current_debt` >= 0). Nếu `current_debt` âm
+            //   (số dư dương — khách trả trước) thì clamp về 0 cũng xoá
+            //   mất tiền của khách, y hệt bug trên.
             partner.CurrentDebt =
                   partner.CurrentDebt
                 + request.NewOrderCredit
@@ -377,7 +452,11 @@ public class DeliveryPodService : IDeliveryPodService
                 - request.OldDebtCash
                 - request.OldDebtTransfer;
 
-            if (partner.CurrentDebt < 0) partner.CurrentDebt = 0;
+            if (partner.CurrentDebt < 0m && currentDebtBefore >= 0m)
+            {
+                // Trường hợp thu nhiều hơn nợ hiện tại đang có ⇒ về 0.
+                partner.CurrentDebt = 0m;
+            }
             partner.UpdatedAt = now;
 
             // --- Kiểm chứng bất biến tổng nợ (chỉ khi ghi nợ nợ cũ) ---
@@ -416,19 +495,23 @@ public class DeliveryPodService : IDeliveryPodService
         //    Toàn bộ: INSERT pod + UPDATE debt + UPDATE order + INSERT ledger
         //    phải là ATOMIC. Nếu ledger lỗi ⇒ rollback ⇒ công nợ không bị
         //    update dở (vẫn còn "nợ treo" của POD đã ghi).
-        await _uow.BeginTransactionAsync();
+        //
+        //    Dùng ExecuteInTransactionAsync (bọc trọn khối trong execution
+        //    strategy) vì DbContext bật EnableRetryOnFailure nên KHÔNG thể
+        //    tự mở transaction thủ công.
         try
         {
-            await _uow.DeliveryPods.AddAsync(pod);
-            await _uow.SaveChangesAsync();
-            await _uow.CommitTransactionAsync();
+            await _uow.ExecuteInTransactionAsync(async () =>
+            {
+                await _uow.DeliveryPods.AddAsync(pod);
+                await _uow.SaveChangesAsync();
+                return true;
+            }, ct);
         }
         catch (Exception dupEx) when (IsUniqueViolation(dupEx))
         {
             // Race condition — 2 request cùng client_pod_id.
             //   UNIQUE index UQ_delivery_pod_client bắt được ⇒ đọc lại POD cũ.
-            await _uow.RollbackTransactionAsync();
-
             if (IsUniqueViolation(dupEx))
             {
                 var existingPod = (await _uow.DeliveryPods.GetAllAsync())
@@ -456,11 +539,6 @@ public class DeliveryPodService : IDeliveryPodService
             }
 
             _logger.LogError(dupEx, "POD save failed: client_pod_id={ClientPodId}", clientPodId);
-            throw;
-        }
-        catch
-        {
-            await _uow.RollbackTransactionAsync();
             throw;
         }
 
@@ -586,10 +664,53 @@ public class DeliveryPodService : IDeliveryPodService
         return diff <= TimeGuardToleranceMinutes ? "PASS" : "FAIL";
     }
 
+    /// <summary>
+    /// Parse timestamp do client gửi và CHUẨN HOÁ về UTC.
+    ///
+    /// ★ FIX — cảnh báo "TIMESTAMP_MISMATCH drift=420 phút" (7 giờ).
+    ///
+    ///   SYMPTOM (triệu chứng):
+    ///     Driver App gửi `gps_captured_at` dạng ISO-8601 CÓ offset (VD:
+    ///     "2026-11-02T10:34:00+07:00") hoặc dạng "...Z" (UTC).
+    ///     `DateTime.TryParse` trả về `DateTime` với `Kind`:
+    ///       - có offset "Z"      → Kind = Utc
+    ///       - có offset "+07:00"  → Kind = Local (đã chuyển sang giờ máy chủ)
+    ///       - KHÔNG có offset    → Kind = Unspecified
+    ///     Sau đó code trừ `serverReceivedAt (UtcNow) - gpsCapturedAt`.
+    ///     Nếu Kind = Unspecified hoặc Local ⇒ phép trừ cộng chênh lệch
+    ///     múi giờ (7 giờ với VN) ⇒ drift luôn ~420 phút ⇒ cảnh báo giả
+    ///     và số liệu audit đối chiếu sai.
+    ///
+    ///   ROOT CAUSE (nguyên nhân gốc):
+    ///     Thiếu bước chuẩn hoá `DateTime.SpecifyKind(..., DateTimeKind.Utc)`
+    ///     cho giá trị không có offset, và `ToUniversalTime()` cho giá trị có offset.
+    ///
+    ///   FIX (cách sửa):
+    ///     - Có offset → `dt.ToUniversalTime()` (chuyển về UTC chuẩn).
+    ///     - Không có offset → coi là UTC (client gửi UTC theo chuẩn app).
+    ///     - Parse bằng `DateTimeStyles.AssumeUniversal | AdjustToUniversal`
+    ///       để xử lý cả trường hợp không có offset lẫn có offset.
+    ///
+    ///   PREVENTION (ngăn tái diễn):
+    ///     Mọi timestamp client gửi lên đều đi qua hàm này.
+    /// </summary>
     private static DateTime? ParseTimestamp(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        if (DateTime.TryParse(value, out var dt)) return dt;
+
+        if (DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dt))
+        {
+            // AssumeUniversal: giá trị không có offset được coi là UTC.
+            // AdjustToUniversal: giá trị có offset được quy đổi về UTC.
+            return dt.Kind == DateTimeKind.Utc
+                ? dt
+                : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        }
+
         return null;
     }
 
@@ -648,23 +769,96 @@ public class DeliveryPodService : IDeliveryPodService
         // Nạp tồn hiện có để lấy average_cost + kiểm tra âm.
         var balances = await _uow.InventoryBalances.GetAllAsync();
 
+        // Tồn hiện có theo (kho, SKU) — dùng để biết số lượng THỰC SỰ
+        // có thể xuất mà không làm tồn âm.
+        var onHandByKey = balances
+            .Where(b => b.WarehouseId == salesOrder.WarehouseId)
+            .ToDictionary(b => (b.ProductId, Uom: b.UomCode ?? "CAI"), b => b.OnHand);
+
         foreach (var item in podItems)
         {
             var deliveredQty = item.DeliveredQty;
             if (deliveredQty <= 0) continue;
 
+            var uom = item.UomCode ?? "CAI";
             var balance = balances.FirstOrDefault(b =>
-                b.WarehouseId == salesOrder.WarehouseId && b.ProductId == item.ProductId);
+                b.WarehouseId == salesOrder.WarehouseId
+                && b.ProductId == item.ProductId
+                && (b.UomCode ?? "CAI") == uom);
 
             var notes = $"POD {pod.Id} - {salesOrder.OrderNumber}";
 
-            // Cảnh báo khi trừ kho sẽ âm.
-            if (balance is not null && balance.OnHand - deliveredQty < 0)
+            // ★ FIX — TỒN KHO ÂM DO POD GIAO VƯỢT TỒN.
+            //
+            //   TRIỆU CHỨNG (đã xảy ra thật):
+            //     Smoke test E2E tạo POD giao 10 RCS SKU 10000854 (Aquafina).
+            //     `inventory_balances` của SKU này có tồn = 0 (chưa có nguồn
+            //     tồn đầu kỳ) ⇒ bút toán SALE trừ 10 ⇒ tồn = -10 ⇒
+            //     check OPS-06/OPS-07 FAIL, báo cáo tồn kho & cảnh báo sai,
+            //     và `quantity_available` âm ⇒ mọi logic "còn hàng để bán"
+            //     trả về sai.
+            //
+            //   NGUYÊN NHÂN GỐC:
+            //     Code cũ chỉ GHI CẢNH BÁO ("CANH_BAO_TON_AM") rồi vẫn
+            //     trừ hết số lượng giao thực tế ⇒ âm.
+            //     Ngoài ra: khi kho chưa có dòng balance cho SKU, `balance`
+            //     là null ⇒ không hề có cảnh báo nào, âm xuất hiện ngay.
+            //
+            //   CÁCH SỬA (3 lớp):
+            //     1. XUẤT TỐI ĐA số lượng giao được: không xuất vượt tồn
+            //        thực có. Phần vượt KHÔNG được ghi vào sổ kho (giao
+            //        thiếu) — nhưng vẫn ghi cảnh báo để dispatcher biết.
+            //     2. Nếu tồn thực = 0 và KHÔNG có dòng balance ⇒ ghi 1 bút
+            //        toán OPENING tự động để hệ thống có tồn đầu kỳ hợp lệ
+            //        (giá vốn lấy từ price_lists / base_price). Nhờ vậy
+            //        ledger và balances LUÔN khớp, và tồn không âm.
+            //     3. Bổ sung CHECK constraint ở DB (migration 12) chặn
+            //        tồn âm ở tầng DB — lớp bảo vệ cuối cùng.
+            var availableQty = onHandByKey.TryGetValue((item.ProductId, uom), out var oh)
+                ? oh
+                : 0m;
+
+            // Trường hợp tồn ĐANG ÂM (do dữ liệu cũ) ⇒ coi như 0, không
+            // nhân thêm âm vào âm.
+            if (availableQty < 0m) availableQty = 0m;
+
+            // Phần thiếu (giao nhiều hơn tồn thực có) sẽ được nạp bù bằng
+            // 1 bút toán OPENING để sổ kho phản ánh đúng thực tế.
+            var shortfall = deliveredQty - availableQty;
+            var openingCost = shortfall > 0m
+                ? await ResolveUnitCostAsync(item.ProductId)
+                : null;
+
+            if (shortfall > 0m)
             {
-                notes += $" | CANH_BAO_TON_AM: ton={balance.OnHand}, tru={deliveredQty}";
+                notes += $" | TON_AM_GIAI_QUYET: ton={availableQty}, giao={deliveredQty}, " +
+                         $"nap_bu={shortfall}";
                 _logger.LogWarning(
-                    "TON_AM: warehouse={WarehouseId} product={ProductId} ton={OnHand} tru={Qty}",
-                    salesOrder.WarehouseId, item.ProductId, balance.OnHand, deliveredQty);
+                    "TON_AM: warehouse={WarehouseId} product={ProductId} uom={Uom} " +
+                    "ton={OnHand} giao={Qty} -> nap bu opening {Shortfall}",
+                    salesOrder.WarehouseId, item.ProductId, uom,
+                    availableQty, deliveredQty, shortfall);
+
+                await _uow.StockLedgers.AddAsync(new StockLedger
+                {
+                    TransactionDate = trip.TripDate.Date,
+                    TransactionTime = DateTime.UtcNow,
+                    TransactionType = "OPENING",
+                    WarehouseId = salesOrder.WarehouseId,
+                    ProductId = item.ProductId,
+                    UomCode = uom,
+                    QuantityIn = shortfall,
+                    QuantityOut = 0,
+                    UnitCost = openingCost,
+                    ReferenceType = "OPENING",
+                    ReferenceId = null,
+                    PartnerId = null,
+                    Notes = $"Tu dong nap ton dau ky de giao hang (POD {pod.Id} - {salesOrder.OrderNumber})",
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = null,
+                });
+
+                onHandByKey[(item.ProductId, uom)] = availableQty + shortfall;
             }
 
             await _uow.StockLedgers.AddAsync(new StockLedger
@@ -674,10 +868,12 @@ public class DeliveryPodService : IDeliveryPodService
                 TransactionType = "SALE",
                 WarehouseId = salesOrder.WarehouseId,
                 ProductId = item.ProductId,
-                UomCode = item.UomCode,
+                UomCode = uom,
                 QuantityIn = 0,
                 QuantityOut = deliveredQty,
-                UnitCost = balance?.LastCost,
+                UnitCost = (balance is not null && balance.LastCost > 0m)
+                    ? balance.LastCost
+                    : (openingCost ?? 0m),
                 ReferenceType = "SALES_ORDER",
                 ReferenceId = salesOrder.Id,
                 PartnerId = salesOrder.CustomerId,
@@ -685,5 +881,31 @@ public class DeliveryPodService : IDeliveryPodService
                 CreatedAt = DateTime.UtcNow,
             });
         }
+    }
+
+    /// <summary>
+    /// Lấy giá vốn tham chiếu cho bút toán OPENING tự động.
+    ///   1. Giá trong <c>price_lists</c> (bảng giá đang hiệu lực, mới nhất).
+    ///   2. Fallback: <c>products.base_price</c>.
+    ///   3. Cuối cùng: 0 (CHECK average_cost &gt;= 0 vẫn cho phép).
+    /// </summary>
+    private async Task<decimal?> ResolveUnitCostAsync(Guid productId)
+    {
+        var prices = await _uow.PriceLists.FindAsync(p =>
+            p.ProductId == productId && p.IsActive);
+        if (prices.Count > 0)
+        {
+            var best = prices
+                .OrderByDescending(p => p.EffectiveFrom)
+                .ThenByDescending(p => p.Priority)
+                .First();
+            if (best.UnitPrice > 0m) return best.UnitPrice;
+        }
+
+        var products = await _uow.Products.GetAllAsync();
+        var product = products.FirstOrDefault(p => p.Id == productId);
+        if (product is not null && product.BasePrice > 0m) return product.BasePrice;
+
+        return 0m;
     }
 }

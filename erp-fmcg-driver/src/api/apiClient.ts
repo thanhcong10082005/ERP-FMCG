@@ -8,9 +8,9 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 /**
  * URL backend, ví dụ:
- *   http://localhost:5000        ← Backend C# (.NET 8) trong Pack
- *   http://localhost:5000/api
- *   https://erp-fmcg-backend.onrender.com/api
+ *   ""                              ← Cùng origin (mặc định, dùng Vite proxy)
+ *   http://localhost:5000           ← Backend C# (.NET 8) trong Pack
+ *   https://erp-fmcg-backend.onrender.com
  *
  * backend trong Pack/erp-fmcg-backend-csharp (ASP.NET Core
  *   .NET 8) cung cấp đầy đủ các route app cần:
@@ -19,9 +19,19 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
  *
  *   Trước đây default là http://localhost:3001 (NestJS cũ đã bị loại khỏi
  *   Pack) => mọi request fail khi chạy đúng stack trong Pack.
+ *
+ * MẶC ĐỊNH MỚI = cùng origin (relative). Lý do:
+ *   - Không phụ thuộc cổng cứng của backend ⇒ chạy được kể cả khi cổng
+ *     5000 đã bị ứng dụng khác chiếm.
+ *   - Không cần CORS preflight cho request same-origin.
+ *   - Vite dev/preview server proxy `/api` sang backend (xem vite.config.ts),
+ *     đích được cấu hình qua biến môi trường `VITE_BACKEND_URL`.
+ *
+ *   Muốn gọi thẳng backend (không qua proxy) thì đặt VITE_API_URL, ví dụ:
+ *   VITE_API_URL=http://localhost:5000
  */
 const RAW_BASE_URL: string =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  import.meta.env.VITE_API_URL ?? '';
 
 /**
  * Chuẩn hoá base URL: bỏ dấu "/" ở cuối và bỏ hậu tố "/api" (nếu có).
@@ -37,7 +47,6 @@ function normalizeBaseUrl(url: string): string {
 }
 
 export const BASE_URL: string = normalizeBaseUrl(RAW_BASE_URL);
-
 const api = axios.create({
   baseURL: BASE_URL,
   timeout: 15000,

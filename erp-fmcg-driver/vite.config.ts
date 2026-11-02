@@ -1,9 +1,51 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import fs from 'fs';
 
-export default defineConfig({
+/**
+ * Đọc endpoint thực tế của Backend C#.
+ *
+ * VÌ SAO CẦN:
+ *   Backend tự dò cổng trống khi cổng ưu tiên (5000) bị ứng dụng khác
+ *   trên máy chiếm — lúc đó API chạy ở cổng khác (VD: 5002). Nếu vite
+ *   proxy vẫn trỏ 5000, mọi request từ Driver App trả ECONNREFUSED và
+ *   toàn bộ PWA hỏng.
+ *
+ *   Backend ghi file `.api-endpoint.json` cạnh vite.config.ts mỗi lần
+ *   khởi động -> vite đọc file này để trỏ đúng cổng.
+ *
+ * THỨ TỰ ƯU TIÊN:
+ *   1. VITE_BACKEND_URL trong .env (ý muốn rõ ràng của người dùng)
+ *   2. .api-endpoint.json (endpoint API tự công bố)
+ *   3. http://localhost:5000 (mặc định)
+ */
+function resolveBackendUrl(env: Record<string, string>): string {
+  if (env.VITE_BACKEND_URL) return env.VITE_BACKEND_URL;
+
+  const endpointFile = path.resolve(__dirname, '.api-endpoint.json');
+  try {
+    if (fs.existsSync(endpointFile)) {
+      const raw = fs.readFileSync(endpointFile, 'utf8');
+      const parsed = JSON.parse(raw) as { baseUrl?: string; port?: number };
+      if (parsed.baseUrl) return parsed.baseUrl;
+      if (parsed.port) return `http://localhost:${parsed.port}`;
+    }
+  } catch {
+    // File hỏng / không đọc được -> bỏ qua, dùng mặc định bên dưới.
+  }
+
+  return 'http://localhost:5000';
+}
+
+export default defineConfig(({ mode }) => {
+  // Đọc biến môi trường từ file .env để proxy trỏ đúng backend.
+  //   VITE_BACKEND_URL — địa chỉ backend C# (mặc định http://localhost:5000)
+  const env = loadEnv(mode, process.cwd(), '');
+  const backendUrl = resolveBackendUrl(env as Record<string, string>);
+
+  return {
   plugins: [
     react(),
     // PWA that (manifest + service worker).
@@ -119,11 +161,22 @@ export default defineConfig({
     port: 3002,
     proxy: {
       '/api': {
-        // Backend C# (.NET 8) chay port 5000.
-        //   Truoc day troi 3001 (NestJS cu, khong con trong Pack).
-        target: 'http://localhost:5000',
+        // Backend C# (.NET 8) trong Pack/erp-fmcg-backend-csharp.
+        //   Đích có thể ghi đè bằng biến môi trường VITE_BACKEND_URL
+        //   (ví dụ khi cổng 5000 đã bị ứng dụng khác chiếm).
+        target: backendUrl,
         changeOrigin: true,
       },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+    },
+  },
+  };
 });

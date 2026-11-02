@@ -40,6 +40,32 @@ public class AppDbContext : DbContext
     public DbSet<EodReconciliation> EodReconciliations => Set<EodReconciliation>();
     public DbSet<EodReconciliationItem> EodReconciliationItems => Set<EodReconciliationItem>();
 
+    /// <summary>
+    /// Convention chung cho MỌI property kiểu decimal.
+    ///
+    /// ★ FIX — "No store type was specified for the decimal property ..." (69 warning).
+    ///
+    ///   SYMPTOM:
+    ///     EF Core mặc định kiểu decimal là decimal(18,2) và cảnh báo mỗi property.
+    ///     Trong DB, các cột tiền khai báo decimal(15,2), toạ độ decimal(10,7),
+    ///     số lượng pod_items decimal(15,3)... Mặc định của EF KHÔNG khớp schema
+    ///     ⇒ rủi ro sinh câu SQL với store type không tồn tại / sai làm tròn.
+    ///
+    ///   FIX:
+    ///     Đặt mặc định (15,2) cho mọi property decimal — khớp đa số cột tiền.
+    ///     Các cột đặc biệt được chỉ định tường minh trong SchemaMappings.cs
+    ///     (HasPrecision) và sẽ ghi đè mặc định này:
+    ///       - toạ độ GPS  : (10,7)  — delivery_pod, partners
+    ///       - số lượng POD : (15,3)  — pod_items
+    ///       - thuế suất   : (5,2)   — products.vat_rate
+    ///       - % chiết khấu: (5,2)   — sales_order_items.discount_percent
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.Properties<decimal>().HavePrecision(15, 2);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

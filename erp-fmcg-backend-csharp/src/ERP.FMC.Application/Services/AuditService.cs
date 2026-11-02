@@ -43,28 +43,52 @@ public class AuditService : IAuditService
     {
         var changedFields = DetectChangedFields(oldValues, newValues);
 
+        // ★ Cột [operation] trong DB là NVARCHAR(50).
+        //   Middleware ghi `$"{METHOD} {path}"` — path có GUID có thể dài > 50 ký tự
+        //   ⇒ SQL Server ném 2628 "String or binary data would be truncated"
+        //   ⇒ MẤT TOÀN BỘ audit log cho request đó (không chỉ 1 dòng).
+        //   → Cắt bớt ở tầng service để không bao giờ vượt giới hạn cột.
+        var safeOperation = Truncate(operation, 500);
+        var safeSource = Truncate(source, 50);
+        var safeRequestId = Truncate(requestId, 100);
+        var safeIpAddress = Truncate(ipAddress, 50);
+        var safeNotes = Truncate(notes, 500);
+        var safeTableName = Truncate(tableName, 100) ?? string.Empty;
+        var safeAction = Truncate(action, 20) ?? string.Empty;
+        var safeUserName = Truncate(userName, 255);
+
         var log = new AuditLog
         {
             Id = Guid.NewGuid(),
-            TableName = tableName,
+            TableName = safeTableName,
             RecordId = recordId,
-            Action = action,
-            Operation = operation,
+            Action = safeAction,
+            Operation = safeOperation,
             OldValues = oldValues != null ? JsonSerializer.Serialize(oldValues) : null,
             NewValues = newValues != null ? JsonSerializer.Serialize(newValues) : null,
             ChangedFields = JsonSerializer.Serialize(changedFields),
             UserId = userId,
-            UserName = userName,
-            Source = source,
+            UserName = safeUserName,
+            Source = safeSource,
             ValidFrom = DateTime.UtcNow,
-            RequestId = requestId,
-            IpAddress = ipAddress,
-            Notes = notes,
+            RequestId = safeRequestId,
+            IpAddress = safeIpAddress,
+            Notes = safeNotes,
             CreatedAt = DateTime.UtcNow
         };
 
         await _uow.AuditLogs.AddAsync(log);
         await _uow.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Cắt chuỗi về độ dài tối đa (null-safe).
+    ///   Dùng cho các cột NVARCHAR có giới hạn độ dài trong DB.
+    /// </summary>
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 
     /// <summary>

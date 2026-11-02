@@ -112,7 +112,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>Sinh báo cáo vận hành ra Excel (.xlsx).</summary>
     [HttpPost("operations/{type}")]
-    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    [Authorize(Policy = "ReportingRole")]
     public async Task<ActionResult<ExportResultDto>> ExportOperations(
         string type,
         [FromBody] ExportRequestDto request,
@@ -136,7 +136,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>Tai file Excel báo cáo vận hành.</summary>
     [HttpGet("operations/download/{fileName}")]
-    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    [Authorize(Policy = "ReportingRole")]
     public ActionResult DownloadOperations(string fileName)
     {
         var exportFolder = Path.Combine(
@@ -155,7 +155,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>Danh sách loại báo cáo vận hành có thể xuất.</summary>
     [HttpGet("operations/types")]
-    [Authorize(Roles = "Admin,Dispatcher,Manager,Accountant")]
+    [Authorize(Policy = "ReportingRole")]
     public ActionResult<object> GetOperationsTypes()
     {
         return Ok(new

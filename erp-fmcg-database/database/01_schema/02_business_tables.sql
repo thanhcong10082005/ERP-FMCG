@@ -373,7 +373,12 @@ CREATE TABLE tenant.inventory_balances (
     CONSTRAINT FK_inv_warehouse FOREIGN KEY (warehouse_id)
         REFERENCES tenant.warehouses(id),
     CONSTRAINT FK_inv_product FOREIGN KEY (product_id)
-        REFERENCES tenant.products(id)
+        REFERENCES tenant.products(id),
+    -- ★ Chặn tồn kho âm ở tầng DB.
+    --   Ngoài trigger (RAISE ERROR khi bút toán làm tồn âm), constraint
+    --   này là lớp bảo vệ CUỐI CÙNG: dù code hay script ghi sai thì
+    --   DB vẫn từ chối.
+    CONSTRAINT CK_inventory_balance_qty_non_negative CHECK (quantity_on_hand >= 0)
 );
 GO
 
@@ -426,5 +431,5 @@ ELSE
 PRINT '✅ Bảng uom_conversions đã tạo';
 GO
 
-PRINT '🎉 Ngày 1.2 hoàn tất: 5 bảng BUSINESS + 1 bảng UTILITY đã sẵn sàng';
+PRINT '🎉 Hoàn tất: 5 bảng BUSINESS + 1 bảng UTILITY đã sẵn sàng';
 GO

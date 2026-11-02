@@ -81,7 +81,11 @@ export const PaymentInput: React.FC<Props> = ({
   onChange,
   initialSplit,
 }) => {
-  const totalRequired = newOrderAmount + oldDebtAmount;
+  // ★ FIX: `old_debt_amount` âm = khách đã trả trước (số dư
+  //   dương của ERP) ⇒ KHÔNG phải khoản phải thu. Clamp về 0 để ma trận
+  //   thanh toán 6 ô không sinh giá trị âm.
+  const effectiveOldDebt = Math.max(0, oldDebtAmount || 0);
+  const totalRequired = newOrderAmount + effectiveOldDebt;
 
   // ── Nhóm đơn mới ──
   const [cash, setCash] = useState<string>(initialSplit?.newOrderCash?.toString() ?? '');
@@ -108,7 +112,7 @@ export const PaymentInput: React.FC<Props> = ({
 
   // Phần còn thiếu của TỪNG nhóm (tính riêng, không gộp)
   const newRemaining = newOrderAmount - (cashNum + transferNum + creditNum);
-  const oldRemaining = oldDebtAmount - (oldCashNum + oldTransferNum + oldCreditNum);
+  const oldRemaining = effectiveOldDebt - (oldCashNum + oldTransferNum + oldCreditNum);
 
   // Tổng đã thu = tiền mặt + chuyển khoản của CẢ 2 nhóm
   // (ghi nợ KHÔNG phải tiền thu)
@@ -141,10 +145,10 @@ export const PaymentInput: React.FC<Props> = ({
           <span>Tiền đơn mới</span>
           <span className="font-semibold">{formatCurrency(newOrderAmount)}</span>
         </div>
-        {oldDebtAmount > 0 && (
+        {effectiveOldDebt > 0 && (
           <div className="flex justify-between text-sm text-primary-800 mb-1">
             <span>Công nợ cũ</span>
-            <span className="font-semibold text-danger">{formatCurrency(oldDebtAmount)}</span>
+            <span className="font-semibold text-danger">{formatCurrency(effectiveOldDebt)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold text-primary text-base pt-2 border-t border-primary-200">
@@ -182,10 +186,10 @@ export const PaymentInput: React.FC<Props> = ({
       </div>
 
       {/* ══ NHÓM 2: CÔNG NỢ CŨ ══ */}
-      {oldDebtAmount > 0 && (
+      {effectiveOldDebt > 0 && (
         <div className="card p-4 space-y-3 border-danger-200">
           <p className="text-sm font-semibold text-danger">
-            Công nợ cũ <span className="font-normal">({formatCurrency(oldDebtAmount)})</span>
+            Công nợ cũ <span className="font-normal">({formatCurrency(effectiveOldDebt)})</span>
           </p>
 
           <MoneyField

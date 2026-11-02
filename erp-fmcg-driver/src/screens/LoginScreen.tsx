@@ -99,8 +99,13 @@ export const LoginScreen: React.FC = () => {
         {/* Dev hints */}
         <div className="mt-6 p-3 bg-slate-100 rounded-xl">
           <p className="text-xs text-text-secondary font-medium mb-1">Gợi ý (Dev):</p>
-          <p className="text-xs text-text-secondary">Nhập <code className="bg-white px-1 rounded">1</code> để đăng nhập với user_id=1 (Driver)</p>
-          <p className="text-xs text-text-secondary">Nhập <code className="bg-white px-1 rounded">0909123456</code> để đăng nhập theo SĐT</p>
+          <p className="text-xs text-text-secondary">
+            Nhập <code className="bg-white px-1 rounded">0909123456</code> để đăng nhập theo SĐT
+          </p>
+          <p className="text-xs text-text-secondary">
+            hoặc mã nhân viên{' '}
+            <code className="bg-white px-1 rounded">SP00005764</code>
+          </p>
         </div>
       </div>
     </div>

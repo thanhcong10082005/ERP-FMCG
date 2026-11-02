@@ -131,6 +131,17 @@ public class AuditLogMiddleware
                 var endpoint = segments[1]; // e.g., "partners"
                 tableName = MapEndpointToTable(endpoint);
 
+                // ★ FIX — `POST /api/sales/pod` có segments = ["api","sales","pod"].
+                //   segments[1] = "sales" ⇒ map thành "delivery_trips" (SAI).
+                //   Điểm giao POD thuộc bảng delivery_pod, không phải delivery_trips.
+                //   → Ưu tiên segments[2] khi nó chỉ rõ resource con.
+                if (segments[2].Equals("pod", StringComparison.OrdinalIgnoreCase))
+                    tableName = "delivery_pod";
+                else if (segments[2].Equals("trips", StringComparison.OrdinalIgnoreCase))
+                    tableName = "delivery_trips";
+                else if (segments[2].Equals("eod", StringComparison.OrdinalIgnoreCase))
+                    tableName = "eod_reconciliations";
+
                 if (Guid.TryParse(segments[2], out var id))
                     recordId = id;
             }

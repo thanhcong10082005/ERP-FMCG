@@ -158,8 +158,14 @@ public class DispatcherService : IDispatcherService
                 StopOrder = stopOrder++,
                 Status = "PENDING",
                 // Snapshot công nợ cũ lúc gán vào chuyến (D8).
+                // ★ FIX: chỉ snapshot phần NỢ DƯƠNG.
+                //   `old_debt` âm = khách đã trả trước (số dư dương) ⇒
+                //   KHÔNG phải khoản phải thu. Snapshot âm làm Driver App
+                //   hiển thị "Phải thu" âm và sinh ra ma trận thanh toán
+                //   6 ô sai lệch.
                 OldDebtAmount = partnerMap.TryGetValue(salesOrder.CustomerId, out var p)
-                    ? p.OldDebt : 0m,
+                    ? DebtSignConventions.OutstandingDebt(p.OldDebt)
+                    : 0m,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
             };

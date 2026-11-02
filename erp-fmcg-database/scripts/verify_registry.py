@@ -301,6 +301,19 @@ CHECKS_OPS: list[Check] = [
                AND COLUMN_NAME IN ('request_id','ip_address','old_values',
                                    'new_values','changed_fields')""",
           "5", "ge"),
+    # --- Chan ton am (migration 12) ---
+    Check("OPS-21", NHOM_OPS, "CHECK quantity_on_hand >= 0 ton tai",
+          """SELECT COUNT(*) FROM sys.check_constraints
+             WHERE name = 'CK_inventory_balance_qty_non_negative'
+               AND parent_object_id = OBJECT_ID('tenant.inventory_balances')
+               AND is_disabled = 0""",
+          "1", "eq"),
+    Check("OPS-22", NHOM_OPS, "CHECK quantity_on_hand >= 0 duoc TRUST (da kiem duyet du lieu)",
+          """SELECT COUNT(*) FROM sys.check_constraints
+             WHERE name = 'CK_inventory_balance_qty_non_negative'
+               AND parent_object_id = OBJECT_ID('tenant.inventory_balances')
+               AND is_not_trusted = 0""",
+          "1", "eq"),
 ]
 
 

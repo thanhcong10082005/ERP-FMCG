@@ -171,7 +171,9 @@ public class DeliveryTripService : IDeliveryTripService
                 .ToHashSet();
             dto.TotalCurrentDebt = partners
                 .Where(p => partnerIds.Contains(p.Id))
-                .Sum(p => p.CurrentDebt);
+                // ★ Chỉ cộng phần NỢ DƯƠNG — khách đã trả trước (số dư
+                //   dương) không phải nợ, không được tính vào tổng.
+                .Sum(p => DebtSignConventions.OutstandingDebt(p.CurrentDebt));
         }
 
         return dto;

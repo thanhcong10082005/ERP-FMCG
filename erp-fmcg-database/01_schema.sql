@@ -804,7 +804,12 @@ CREATE TABLE tenant.inventory_balances (
     CONSTRAINT FK_inv_warehouse FOREIGN KEY (warehouse_id)
         REFERENCES tenant.warehouses(id),
     CONSTRAINT FK_inv_product FOREIGN KEY (product_id)
-        REFERENCES tenant.products(id)
+        REFERENCES tenant.products(id),
+    -- ★ Chặn tồn kho âm ở tầng DB.
+    --   Ngoài trigger (RAISE ERROR khi bút toán làm tồn âm), constraint
+    --   này là lớp bảo vệ CUỐI CÙNG: dù code hay script ghi sai thì
+    --   DB vẫn từ chối.
+    CONSTRAINT CK_inventory_balance_qty_non_negative CHECK (quantity_on_hand >= 0)
 );
 GO
 
@@ -857,7 +862,7 @@ ELSE
 PRINT '✅ Bảng uom_conversions đã tạo';
 GO
 
-PRINT '🎉 Ngày 1.2 hoàn tất: 5 bảng BUSINESS + 1 bảng UTILITY đã sẵn sàng';
+PRINT '🎉 Hoàn tất: 5 bảng BUSINESS + 1 bảng UTILITY đã sẵn sàng';
 GO
 
 
@@ -1116,6 +1121,61 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- ★ CHẶN TỒN KHO ÂM — lớp bảo vệ cuối cùng ở tầng DB.
+    --   Nếu bút toán làm số dư của (kho, SKU) âm thì RAISE ERROR ⇒
+    --   transaction rollback ⇒ không ghi được bút toán âm.
+    --   (Sự cố đã xảy ra thật: POD giao 10 RCS SKU 10000854 khi tồn = 0
+    --    ⇒ tồn = -10 ⇒ báo cáo tồn kho sai, quantity_available âm.)
+    IF EXISTS (
+        SELECT 1
+        FROM (
+            SELECT
+                i.warehouse_id,
+                i.product_id,
+                i.uom_code,
+                SUM(i.quantity_in - i.quantity_out) AS net_delta,
+                ISNULL(b.quantity_on_hand, 0) AS current_qty
+            FROM inserted i
+            LEFT JOIN tenant.inventory_balances b
+              ON  b.warehouse_id = i.warehouse_id
+              AND b.product_id   = i.product_id
+              AND b.uom_code     = i.uom_code
+            GROUP BY i.warehouse_id, i.product_id, i.uom_code,
+                     b.quantity_on_hand
+        ) d
+        WHERE d.current_qty + d.net_delta < 0
+    )
+    BEGIN
+        DECLARE @detail NVARCHAR(1000);
+        SELECT @detail = STUFF((
+            SELECT N'; ' + CONCAT(p.sku, ' ton=', d.current_qty, ' xuat=', d.net_delta)
+            FROM (
+                SELECT
+                    i.warehouse_id,
+                    i.product_id,
+                    i.uom_code,
+                    SUM(i.quantity_in - i.quantity_out) AS net_delta,
+                    ISNULL(b.quantity_on_hand, 0) AS current_qty
+                FROM inserted i
+                LEFT JOIN tenant.inventory_balances b
+                  ON  b.warehouse_id = i.warehouse_id
+                  AND b.product_id   = i.product_id
+                  AND b.uom_code     = i.uom_code
+                GROUP BY i.warehouse_id, i.product_id, i.uom_code,
+                         b.quantity_on_hand
+            ) d
+            JOIN tenant.products p ON p.id = d.product_id
+            WHERE d.current_qty + d.net_delta < 0
+            FOR XML PATH(''), TYPE
+        ).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+        RAISERROR (
+            N'Ton kho am: khong the xuat so luong vuot ton thuc te.%s',
+            16, 1, @detail
+        );
+        RETURN;
+    END
+
     -- UPSERT inventory_balances cho mỗi dòng inserted
     MERGE tenant.inventory_balances AS target
     USING (
@@ -1159,7 +1219,7 @@ PRINT '✅ Trigger trg_stockledger_after_insert đã tạo';
 PRINT '   → INSERT stock_ledger sẽ tự động cập nhật inventory_balances';
 GO
 
-PRINT '🎉 Ngày 1.4 hoàn tất: Trigger tự động cập nhật tồn kho';
+PRINT '🎉 Hoàn tất: Trigger tự động cập nhật inventory_balances';
 GO
 
 
@@ -1314,7 +1374,7 @@ BEGIN
 
         -- Action
         action          NVARCHAR(20) NOT NULL,  -- INSERT, UPDATE, DELETE, RESTORE
-        operation       NVARCHAR(50),           -- CREATE_ORDER, UPDATE_PRICE, ...
+        operation       NVARCHAR(500),          -- CREATE_ORDER, UPDATE_PRICE, "METHOD /path/with/guid"
 
         -- Changes
         old_values      NVARCHAR(MAX),           -- JSON snapshot

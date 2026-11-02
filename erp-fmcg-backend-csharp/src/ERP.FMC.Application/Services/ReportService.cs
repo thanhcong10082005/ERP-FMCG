@@ -185,9 +185,18 @@ public class ReportService : IReportService
         {
             // Tuổi nợ tính theo `old_debt_date` (ngày ghi nhận nợ cũ).
             // Khách chưa có old_debt_date ⇒ xem như 0-30 ngày.
+            //
+            // ★ FIX: chỉ tính khách thực sự CÓ NỢ.
+            //   `old_debt`/`current_debt` âm = khách đã trả trước (số dư
+            //   dương của ERP) ⇒ KHÔNG phải nợ ⇒ không được đưa vào báo
+            //   cáo "công nợ theo tuổi". Trước đây điều kiện
+            //   `CurrentDebt <= 0 && OldDebt <= 0` vẫn TRUE cho các khách
+            //   âm (vì -5 <= 0) ⇒ báo cáo lẫn 281 khách không nợ.
             var group = partners.Where(p =>
             {
-                if (p.CurrentDebt <= 0 && p.OldDebt <= 0) return false;
+                if (!DebtSignConventions.HasOutstandingDebt(p.CurrentDebt)
+                    && !DebtSignConventions.HasOutstandingDebt(p.OldDebt))
+                    return false;
                 var age = p.OldDebtDate.HasValue
                     ? (today - p.OldDebtDate.Value.Date).Days
                     : 0;
@@ -199,8 +208,10 @@ public class ReportService : IReportService
             {
                 Bucket = name,
                 PartnerCount = group.Count,
-                TotalDebt = group.Sum(p => p.CurrentDebt),
-                TotalOldDebt = group.Sum(p => p.OldDebt),
+                // Chỉ cộng phần NỢ DƯƠNG (bỏ qua số dư dương của khách
+                // trả trước) ⇒ tổng công nợ luôn >= 0.
+                TotalDebt = group.Sum(p => DebtSignConventions.OutstandingDebt(p.CurrentDebt)),
+                TotalOldDebt = group.Sum(p => DebtSignConventions.OutstandingDebt(p.OldDebt)),
             });
         }
 

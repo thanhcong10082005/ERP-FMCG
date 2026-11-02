@@ -28,15 +28,20 @@ export function getStoredUser(): User | null {
 }
 
 export async function devLogin(identifier: string): Promise<AuthResponse> {
-  // identifier: user_id (GUID string) OR email OR phone
+  // identifier: user_id (GUID string) OR email OR username OR phone
   let body: Record<string, string>;
 
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)) {
     body = { user_id: identifier };
   } else if (identifier.includes('@')) {
     body = { email: identifier };
-  } else {
+  } else if (/^0\d{9,10}$/.test(identifier)) {
+    // Số điện thoại Việt Nam: bắt đầu bằng 0, tổng 10-11 chữ số.
     body = { phone: identifier };
+  } else {
+    // Mã nhân viên / username (ví dụ "SP00005764", "GH0019").
+    // Backend dev-login hỗ trợ tra theo username.
+    body = { username: identifier };
   }
 
   const response = await api.post<AuthResponse>('/api/auth/dev-login', body);

@@ -82,7 +82,12 @@ export const PaymentScreen: React.FC = () => {
     );
   }
 
-  const oldDebtAmount = order.old_debt_amount || 0;
+  // ★ FIX: `old_debt` ÂM = khách đã TRẢ TRƯỚC (số dư dương
+  //   của ERP), KHÔNG phải khoản phải thu. Server đã chuẩn hoá khi
+  //   snapshot (`old_debt_amount`), nhưng dữ liệu offline/nhập tay có
+  //   thể còn giá trị âm ⇒ chuẩn hoá lại ở tầng UI cho chắc ăn, tránh
+  //   hiển thị "Phải thu: -660.000đ" và sinh ma trận thanh toán 6 ô âm.
+  const oldDebtAmount = Math.max(0, order.old_debt_amount || 0);
   const totalRequired = newOrderAmount + oldDebtAmount;
 
   const handlePaymentChange = (split: {

@@ -21,8 +21,10 @@ const statusBgClass: Record<string, string> = {
 };
 
 export const DeliveryCard: React.FC<Props> = ({ order, index, isActive }) => {
-  const totalPayable =
-    (order.total_amount || 0) + (order.old_debt_amount || 0);
+  // ★ `old_debt_amount` âm = khách đã trả trước (số dư dương) ⇒ không
+  //   phải khoản phải thu. Clamp về 0 để không hiển thị "Phải thu" âm.
+  const oldDebtAmount = Math.max(0, order.old_debt_amount || 0);
+  const totalPayable = (order.total_amount || 0) + oldDebtAmount;
 
   const phoneLink = order.phone
     ? `tel:${order.phone}`
@@ -71,11 +73,11 @@ export const DeliveryCard: React.FC<Props> = ({ order, index, isActive }) => {
               {formatCurrency(order.total_amount)}
             </p>
           </div>
-          {(order.old_debt_amount ?? 0) > 0 && (
+          {(oldDebtAmount ?? 0) > 0 && (
             <div>
               <p className="text-xs text-text-secondary">Công nợ cũ</p>
               <p className="text-sm font-semibold text-danger">
-                {formatCurrency(order.old_debt_amount)}
+                {formatCurrency(oldDebtAmount)}
               </p>
             </div>
           )}

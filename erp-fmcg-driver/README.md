@@ -82,9 +82,10 @@ npx tsc --noEmit
 
 ## 5. Cấu hình `.env`
 
-| Biến           | Bắt buộc            | Ý nghĩa                                     |
-| -------------- | ------------------- | ------------------------------------------- |
-| `VITE_API_URL` | Không (có mặc định) | URL backend, ví dụ `http://localhost:5000`  |
+| Biến               | Bắt buộc            | Ý nghĩa                                              |
+| ------------------ | ------------------- | ---------------------------------------------------- |
+| `VITE_API_URL`     | Không (có mặc định) | URL backend, ví dụ `http://localhost:5000`           |
+| `VITE_BACKEND_URL` | Không (có mặc định) | Đích proxy `/api` của vite (dev + preview)           |
 
 `apiClient.ts` tự chuẩn hoá URL — có hay không có hậu tố `/api` đều được:
 
@@ -97,6 +98,32 @@ npx tsc --noEmit
 Nhờ vậy không xảy ra tình trạng request bị lặp `/api/api/...`.
 
 > ⚠️ Biến `VITE_*` được nhúng vào bundle lúc **build**. Đổi `.env` phải build lại.
+
+### Tự dò cổng backend (tính năng mới)
+
+Backend C# **tự dò cổng trống** khi cổng ưu tiên (5000) bị ứng dụng khác
+trên máy chiếm — nếu không, API sẽ chết lúc khởi động và toàn bộ PWA hỏng
+theo (mọi request trả `ECONNREFUSED`).
+
+Để Driver App không bị "đứt" theo, backend ghi cổng thực tế ra file
+`.api-endpoint.json` (cạnh `vite.config.ts`) mỗi lần khởi động:
+
+```json
+{ "baseUrl": "http://localhost:5002", "port": 5002, "pid": 6756 }
+```
+
+`vite.config.ts` đọc file này theo thứ tự ưu tiên:
+
+1. `VITE_BACKEND_URL` trong `.env` — ý muốn rõ ràng của người dùng.
+2. `.api-endpoint.json` — endpoint API tự công bố.
+3. `http://localhost:5000` — mặc định.
+
+```bash
+# Kiểm tra endpoint backend đang dùng
+curl http://localhost:5000/api/health/endpoint
+```
+
+> `.api-endpoint.json` được `.gitignore` — phụ thuộc cổng nghe động, không commit.
 
 ---
 

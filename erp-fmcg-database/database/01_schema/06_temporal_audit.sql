@@ -148,7 +148,7 @@ BEGIN
 
         -- Action
         action          NVARCHAR(20) NOT NULL,  -- INSERT, UPDATE, DELETE, RESTORE
-        operation       NVARCHAR(50),           -- CREATE_ORDER, UPDATE_PRICE, ...
+        operation       NVARCHAR(500),          -- CREATE_ORDER, UPDATE_PRICE, "METHOD /path/with/guid"
 
         -- Changes
         old_values      NVARCHAR(MAX),           -- JSON snapshot

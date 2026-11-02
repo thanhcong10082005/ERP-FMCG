@@ -20,7 +20,13 @@ public class AuditLog
     [Required, MaxLength(20)]
     public string Action { get; set; } = string.Empty; // INSERT, UPDATE, DELETE, RESTORE
 
-    [MaxLength(50)]
+    /// <summary>
+    /// Mô tả thao tác, ví dụ "CREATE_ORDER" hoặc "PUT /api/sales/trips/{guid}/start".
+    /// ★ Độ dài phải khớp cột [operation] trong DB (NVARCHAR(500)).
+    ///   Trước đây là 50 ⇒ path có GUID dài bị SQL Server cắt báo lỗi 2628
+    ///   ⇒ mất toàn bộ audit log cho request đó.
+    /// </summary>
+    [MaxLength(500)]
     public string? Operation { get; set; }
 
     public string? OldValues { get; set; }     // JSON

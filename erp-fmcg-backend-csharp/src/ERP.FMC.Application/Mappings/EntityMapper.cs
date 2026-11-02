@@ -47,6 +47,8 @@ public static class EntityMapper
         OutletTypeCode = p.OutletTypeCode,
         CreditLimit = p.CreditLimit,
         CurrentDebt = p.CurrentDebt,
+        OldDebt = p.OldDebt,
+        OldDebtDate = p.OldDebtDate,
         IsActive = p.IsActive,
         CreatedAt = p.CreatedAt,
     };

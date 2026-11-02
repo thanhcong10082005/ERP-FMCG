@@ -8,6 +8,8 @@ using ERP.FMC.Infrastructure.Repositories;
 using ERP.FMC.Infrastructure.Services;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -20,7 +22,16 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? @"Server=.\SQLEXPRESS;Database=ERP_FMCG;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False";
 
 builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
-builder.Configuration["ApiBaseUrl"] = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:5000";
+
+// --- ĐỒNG BỘ CỔNG KHỞI ĐỘNG -------------------------------------------------
+// Ở đây ta tự dò cổng trống, ghi đè cấu hình và đồng bộ ApiBaseUrl + CORS
+// để toàn hệ thống luôn nhất quán (API ↔ SmokeTest ↔ Driver App).
+var explicitApiBaseUrl = builder.Configuration["ApiBaseUrl"];
+var actualHttpEndpoint = SyncKestrelEndpoints(builder.Configuration);
+
+builder.Configuration["ApiBaseUrl"] = !string.IsNullOrWhiteSpace(explicitApiBaseUrl)
+    ? explicitApiBaseUrl.TrimEnd('/')
+    : actualHttpEndpoint;
 
 // ============== Services ==============
 
@@ -104,6 +115,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(ResolveJwtKey(jwtOptions))),
             ClockSkew = TimeSpan.FromMinutes(1),
+            // Token phát ra dùng claim tùy biến "role" (không phải ClaimTypes.Role).
+            // Khai báo RoleClaimType để `User.IsInRole(...)` và handler role hoạt động.
+            RoleClaimType = "role",
+            NameClaimType = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
         };
 
         options.Events = new JwtBearerEvents
@@ -121,6 +136,51 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+// Role KHÔNG phân biệt hoa/thường.
+// DB lưu role dạng UPPERCASE (ADMIN/MANAGER/ACCOUNTANT/SALES/WAREHOUSE) trong khi
+// `Roles = "Admin,Manager"` (RolesAuthorizationRequirement) so sánh phân biệt
+// hoa/thường ⇒ "ADMIN" != "Admin" ⇒ 403 cho MỌI endpoint quản trị dù tài khoản
+// có role hợp lệ. Các policy dưới đây dùng RoleInAnyRequirement (case-insensitive).
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+    ERP.FMC.Api.Policies.RoleInAnyHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    // ★ FIX — FallbackPolicy: mặc định YÊU CẦU token hợp lệ cho MỌI endpoint.
+    //
+    //   SYMPTOM (triệu chứng):
+    //     Trước đây chỉ một số controller khai báo [Authorize] (Dispatcher, Reports,
+    //     DriverSales). Các controller còn lại — Audit, Exports, Imports, Monitoring,
+    //     GoLive, Uat, Smoke, Partners, Products, SalesOrders, Inventory, Catalog —
+    //     KHÔNG có attribute ⇒ KHÔNG cần token vẫn gọi được.
+    //     ⇒ `GET /api/audit/logs` (không token) trả 200, lộ toàn bộ nhật ký kiểm toán.
+    //     ⇒ `POST /api/golive/switch-dns` (không token) chạy được.
+    //     ⇒ Đây là lỗ hổng "thiếu xác thực mặc định" (CWE-306).
+    //
+    //   FIX (cách sửa):
+    //     Đặt FallbackPolicy = RequireAuthenticatedUser ⇒ mặc định CHẶN,
+    //     và chỉ mở những endpoint thực sự công khai bằng [AllowAnonymous]:
+    //       - POST /api/auth/login, POST /api/auth/dev-login
+    //       - GET  /api/Health, GET /api/Health/deep  (health check cho monitor/LB)
+    //
+    //   PREVENTION (ngăn tái diễn):
+    //     Controller MỚI mặc định đã được bảo vệ; muốn mở phải khai báo
+    //     [AllowAnonymous] tường minh ⇒ review dễ thấy.
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    // Khu vực điều phối / vận hành
+    options.AddPolicy("DispatcherRole", policy =>
+        policy.AddRequirements(new ERP.FMC.Api.Policies.RoleInAnyRequirement(
+            "Admin", "Dispatcher", "Manager")));
+
+    // Báo cáo + xuất Excel
+    options.AddPolicy("ReportingRole", policy =>
+        policy.AddRequirements(new ERP.FMC.Api.Policies.RoleInAnyRequirement(
+            "Admin", "Dispatcher", "Manager", "Accountant")));
+});
 
 // Validators
 builder.Services.AddValidatorsFromAssemblyContaining<ERP.FMC.Application.DTOs.PartnerDto>();
@@ -212,23 +272,74 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get
 
 if (allowedOrigins.Length == 0)
 {
+    // Danh sách origin mặc định.
+    //   5173 = Vite dev server (port chuẩn của CRA/React template)
+    //   3002 = Vite dev server của Driver App (xem erp-fmcg-driver/vite.config.ts)
+    //   4173 = Vite preview server của Driver App (npm run preview)
+    //   5000/5001 = chính API + HTTPS của API
+    // Thiếu 3002/4173 sẽ khiến Driver App gặp lỗi CORS khi gọi API.
     allowedOrigins = new[]
     {
         "http://localhost:5173",
-        "http://localhost:5000",
-        "http://localhost:5001",
         "http://127.0.0.1:5173",
+        "http://localhost:3002",
+        "http://127.0.0.1:3002",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:5001",
+        "http://127.0.0.1:5001",
     };
 }
+
+// Thêm origin của chính API theo cổng thực tế (có thể đã dịch khỏi 5000
+// vì 5000 bị ứng dụng khác chiếm). Nếu không, PWA gọi thẳng API ở cổng
+// mới sẽ bị CORS chặn.
+if (!string.IsNullOrWhiteSpace(actualHttpEndpoint) && actualHttpEndpoint != "http://localhost:0")
+{
+    var origin = actualHttpEndpoint.TrimEnd('/');
+    var extraOrigins = new List<string> { origin };
+    if (origin.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase))
+        extraOrigins.Add(origin.Replace("http://localhost:", "http://127.0.0.1:"));
+    allowedOrigins = allowedOrigins.Concat(extraOrigins).Distinct().ToArray();
+}
+
+// Biểu thức kiểm tra origin: chấp nhận danh sách cấu hình VÀ mọi origin
+// loopback (localhost/127.0.0.1/[::1]) ở bất kỳ cổng nào.
+//   Lý do: cổng nghe của API/Vite có thể thay đổi động (Kestrel tự chọn
+//   cổng trống khi 5000 bị chiếm), nếu khoá cứng theo cổng sẽ hỏng CORS.
+//   An toàn: website bên ngoài KHÔNG thể giả mạo Origin thành loopback.
+bool IsAllowedOrigin(string origin) =>
+    !string.IsNullOrWhiteSpace(origin)
+    && (allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)
+        || IsLoopbackOrigin(origin));
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(allowedOrigins)
+        policy.SetIsOriginAllowed(IsAllowedOrigin)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .SetPreflightMaxAge(TimeSpan.FromSeconds(60));
     }));
+
+/// <summary>
+/// Kiểm tra origin có trỏ về loopback (localhost / 127.0.0.1 / ::1) hay không.
+/// Chấp nhận mọi cổng vì cổng dev server có thể thay đổi theo phiên chạy.
+/// </summary>
+static bool IsLoopbackOrigin(string origin)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+    if (!string.Equals(uri.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    var host = uri.Host.Trim('[', ']');
+    return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
+}
 
 // Logging
 builder.Services.AddLogging(b => b.AddConsole());
@@ -236,7 +347,9 @@ builder.Services.AddLogging(b => b.AddConsole());
 // ============== Build App ==============
 var app = builder.Build();
 
-// Root health check
+// Root health check.
+//   `.AllowAnonymous()` là BẮT BUỘC: FallbackPolicy yêu cầu token cho
+//   mọi endpoint, kể cả minimal API. Thiếu khai báo này => HTTP 401.
 app.MapGet("/", () => Results.Ok(new
 {
     name = "ERP FMCG API",
@@ -244,7 +357,21 @@ app.MapGet("/", () => Results.Ok(new
     status = "running",
     docs = "/swagger",
     health = "/api/health"
-}));
+})).AllowAnonymous();
+
+// Cổng nghe thực tế của API.
+//   Driver App (vite proxy) cần biết cổng này khi API tự dò cổng trống
+//   (VD: cổng 5000 bị ứng dụng khác chiếm). Endpoint này CÔNG KHAI và
+//   chỉ trả về thông tin không nhạy cảm.
+//
+//   `.AllowAnonymous()` là BẮT BUỘC: FallbackPolicy yêu cầu token cho
+//   mọi endpoint, kể cả minimal API. Thiếu khai báo này => HTTP 401.
+app.MapGet("/api/health/endpoint", () => Results.Ok(new
+{
+    baseUrl = builder.Configuration["ApiBaseUrl"],
+    port = ResolveBoundPort(builder.Configuration["ApiBaseUrl"]),
+    timestamp = DateTime.UtcNow
+})).AllowAnonymous();
 
 // API health check nằm trong HealthController (route api/health).
 // KHÔNG khai báo trùng ở đây, nếu không request sẽ lỗi
@@ -286,6 +413,49 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Chốt endpoint thực tế sau khi Kestrel đã bind.
+//   Với port 0, OS chọn cổng ngẫu nhiên -> phải đọc lại từ
+//   IServerAddressesFeature để ApiBaseUrl / CORS / SmokeTest biết cổng đúng.
+//   Với cổng cố định, giữ nguyên giá trị đã dò sẵn.
+if (actualHttpEndpoint == "http://localhost:0")
+{
+    var addresses = app.Services.GetRequiredService<IServer>()
+        .Features.Get<IServerAddressesFeature>();
+    var bound = addresses?.Addresses?.FirstOrDefault(a =>
+        !a.Contains("https://", StringComparison.OrdinalIgnoreCase));
+    if (!string.IsNullOrWhiteSpace(bound))
+    {
+        builder.Configuration["ApiBaseUrl"] = bound.TrimEnd('/');
+        Console.WriteLine($"[BOOT] Kestrel da bind, endpoint thuc te: {bound}");
+    }
+}
+
+// Xuất endpoint ra file để Driver App (vite proxy) dò được cổng API khi
+// API tự chuyển cổng (cổng ưu tiên bị ứng dụng khác chiếm).
+//   File: erp-fmcg-driver/.api-endpoint.json (nằm cạnh vite.config.ts)
+//   Nếu ghi thất bại (read-only fs) -> chỉ log cảnh báo, KHÔNG làm API chết.
+try
+{
+    var driverDir = ResolveDriverDirectory();
+    if (!string.IsNullOrWhiteSpace(driverDir))
+    {
+        var endpointFile = Path.Combine(driverDir, ".api-endpoint.json");
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            baseUrl = builder.Configuration["ApiBaseUrl"],
+            port = ResolveBoundPort(builder.Configuration["ApiBaseUrl"]),
+            pid = Environment.ProcessId,
+            updatedAt = DateTime.UtcNow
+        });
+        File.WriteAllText(endpointFile, payload);
+        Console.WriteLine($"[BOOT] Da ghi endpoint file: {endpointFile}");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[BOOT] WARN khong ghi duoc endpoint file: {ex.Message}");
+}
 
 app.Run();
 
@@ -335,4 +505,159 @@ static string ResolveJwtKey(JwtOptions options)
         key = key.PadRight(32, '0');
 
     return key;
+}
+
+/// <summary>
+/// Đồng bộ cổng nghe của Kestrel và trả về URL HTTP thực tế.
+///
+/// VÌ SAO CẦN:
+///   Cổng mặc định (5000) có thể đã bị ứng dụng khác trên máy chiếm
+///   . Khi đó Kestrel ném
+///   <c>AddressInUseException</c> ngay lúc bind và API CHẾT — không
+///   phản hồi HTTP nào, Driver App / smoke test đều trả ECONNREFUSED.
+///
+/// CÁCH SỬA:
+///   1. Nếu người dùng chỉ định rõ endpoint (biến môi trường
+///      <c>Kestrel__Endpoints__Http__Url</c> / <c>ASPNETCORE_URLS</c>)
+///      -> giữ nguyên, KHÔNG tự ý đổi (đây là ý muốn rõ ràng).
+///   2. Ngược lại: dò từ cổng ưu tiên (5000, 5002..5099, 5218) xuống
+///      cổng trống đầu tiên. Nếu tất cả đều bận -> dùng cổng 0 (OS tự
+///      chọn cổng trống) để API VẪN KHỞI ĐỘNG ĐƯỢC thay vì crash.
+///   3. Ghi cổng đã chọn lại vào <c>Kestrel:Endpoints:Http:Url</c> để
+///      <c>SmokeTestService.ResolveBaseUrl()</c> và mọi nơi khác đọc
+///      đúng cổng thực tế.
+///   4. In ra console để người vận hành biết API đang ở đâu.
+///
+/// LƯU Ý: HTTPS endpoint giữ nguyên mặc định; nếu HTTPS bị chiếm thì
+/// Kestrel sẽ bỏ qua (vì chỉ nghe HTTP trong local dev).
+/// </summary>
+static string SyncKestrelEndpoints(IConfigurationManager config)
+{
+    const string httpUrlKey = "Kestrel:Endpoints:Http:Url";
+
+    // Ưu tiên 1: endpoint do môi trường chỉ định -> tôn trọng ý muốn người dùng.
+    //   LƯU Ý: `dotnet run` tự đặt ASPNETCORE_URLS từ launchSettings.json, nên
+    //   biến này KHÔNG nhất thiết là ý muốn thật của người dùng. Vì vậy ta vẫn
+    //   kiểm tra cổng có trống không; nếu bận thì tự dò cổng khác thay vì crash.
+    var envHttpUrl = Environment.GetEnvironmentVariable("Kestrel__Endpoints__Http__Url");
+    var envUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+    var explicitUrl = !string.IsNullOrWhiteSpace(envHttpUrl)
+        ? envHttpUrl
+        : (!string.IsNullOrWhiteSpace(envUrls) && envUrls.Contains("http://", StringComparison.OrdinalIgnoreCase)
+            ? envUrls
+            : null);
+
+    if (!string.IsNullOrWhiteSpace(explicitUrl))
+    {
+        // Nhiều endpoint cách nhau bằng dấu chấm phẩy -> chỉ xét endpoint HTTP đầu tiên.
+        var firstHttp = explicitUrl
+            .Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(u => u.Contains("http://", StringComparison.OrdinalIgnoreCase));
+
+        if (TryGetPort(firstHttp, out var explicitPort) && !IsPortFree(explicitPort))
+        {
+            Console.WriteLine(
+                $"[BOOT] Canh {explicitUrl} da BI CHIEM (port {explicitPort}) — " +
+                "se tu dong chon cong trong khac thay vi crash.");
+        }
+        else
+        {
+            config[httpUrlKey] = firstHttp ?? explicitUrl;
+            Console.WriteLine($"[BOOT] Kestrel HTTP endpoint (tu moi truong): {firstHttp ?? explicitUrl}");
+            return (firstHttp ?? explicitUrl).TrimEnd('/');
+        }
+    }
+
+    // Ưu tiên 2: dò cổng trống.
+    var preferred = new[] { 5000, 5002, 5003, 5004, 5005, 5006, 5007, 5008, 5009,
+                            5010, 5011, 5012, 5013, 5014, 5015, 5016, 5017, 5018, 5019,
+                            5020, 5021, 5022, 5023, 5024, 5025, 5026, 5027, 5028, 5029,
+                            5030, 5031, 5032, 5033, 5034, 5035, 5036, 5037, 5038, 5039,
+                            5090, 5091, 5092, 5093, 5094, 5095, 5096, 5097, 5098, 5099 };
+    foreach (var port in preferred)
+    {
+        if (IsPortFree(port))
+        {
+            var url = $"http://localhost:{port}";
+            config[httpUrlKey] = url;
+            Console.WriteLine($"[BOOT] Kestrel HTTP endpoint: {url}");
+            return url;
+        }
+    }
+
+    // Ưu tiên 3: để OS tự chọn cổng trống -> API luôn khởi động được.
+    // Cổng thực tế sẽ được chốt lại ở ApplicationStarted (xem Program.cs).
+    var fallbackUrl = "http://localhost:0";
+    config[httpUrlKey] = fallbackUrl;
+    Console.WriteLine("[BOOT] Tat ca cong uu tien deu dang ban — Kestrel se tu chon cong trong (port 0).");
+    return fallbackUrl;
+}
+
+/// <summary>
+/// Trích xuất số cổng từ một URL (VD: "http://localhost:5000" -> 5000).
+/// Trả về false nếu URL không chứa cổng (VD: "http://localhost" -> cổng 80 mặc định).
+/// </summary>
+static bool TryGetPort(string? url, out int port)
+{
+    port = 0;
+    if (string.IsNullOrWhiteSpace(url)) return false;
+    if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)) return false;
+    return uri.Port > 0 && int.TryParse(uri.Port.ToString(), out port);
+}
+
+/// <summary>
+/// Lấy số cổng thực tế đang lắng nghe từ URL base của API.
+/// Trả về 0 nếu không xác định được.
+/// </summary>
+static int ResolveBoundPort(string? baseUrl)
+{
+    TryGetPort(baseUrl, out var port);
+    return port;
+}
+
+/// <summary>
+/// Tìm thư mục Driver App (chứa vite.config.ts) để ghi file endpoint.
+/// Dò ngược từ thư mục hiện tại lên tối đa 6 cấp.
+/// Nếu không tìm thấy -> trả null (API vẫn chạy bình thường).
+/// </summary>
+static string? ResolveDriverDirectory()
+{
+    var dir = new DirectoryInfo(AppContext.BaseDirectory);
+    for (var i = 0; i < 8 && dir is not null; i++)
+    {
+        if (File.Exists(Path.Combine(dir.FullName, "vite.config.ts"))
+            && Directory.Exists(Path.Combine(dir.FullName, "src")))
+            return dir.FullName;
+
+        var sibling = Path.Combine(dir.FullName, "erp-fmcg-driver");
+        if (File.Exists(Path.Combine(sibling, "vite.config.ts")))
+            return sibling;
+
+        dir = dir.Parent;
+    }
+    return null;
+}
+
+/// <summary>
+/// Kiểm tra một cổng TCP có đang trống (không bị process khác chiếm) hay không.
+/// Dùng TcpListener thử bind rồi release ngay.
+/// </summary>
+static bool IsPortFree(int port)
+{
+    try
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+        listener.Start();
+        listener.Stop();
+        return true;
+    }
+    catch (System.Net.Sockets.SocketException)
+    {
+        return false;
+    }
+    catch (Exception)
+    {
+        // Không xác định được -> coi như trống, Kestrel sẽ báo lỗi nếu thật sự bận.
+        return true;
+    }
 }

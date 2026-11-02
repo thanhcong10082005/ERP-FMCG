@@ -17,7 +17,20 @@ public class PartnerDto
     public Guid? RouteId { get; set; }
     public string? OutletTypeCode { get; set; }
     public decimal CreditLimit { get; set; }
+
+    /// <summary>Công nợ hiện tại (nợ chưa thu). Âm = khách đã trả trước.</summary>
     public decimal CurrentDebt { get; set; }
+
+    /// <summary>
+    /// Công nợ cũ (nợ chưa thu từ kỳ trước).
+    /// Âm = khách đã trả trước (số dư dương của ERP) — xem
+    /// <c>DebtSignConventions</c>.
+    /// </summary>
+    public decimal OldDebt { get; set; }
+
+    /// <summary>Ngày ghi nhận công nợ cũ (dùng cho báo cáo tuổi nợ).</summary>
+    public DateTime? OldDebtDate { get; set; }
+
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 }

@@ -16,6 +16,9 @@ namespace ERP.FMC.Api.Controllers;
 [ApiController]
 [Route("api/auth")]
 [Produces("application/json")]
+// ★ Endpoint xác thực là CÔNG KHAI (chưa có token khi gọi).
+//   FallbackPolicy mặc định chặn mọi endpoint, nên phải mở ở class level.
+[AllowAnonymous]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;

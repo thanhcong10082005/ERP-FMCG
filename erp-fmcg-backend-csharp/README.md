@@ -99,7 +99,33 @@ curl http://localhost:5000/api/health
 `/api/health` trả về `status: UP` kèm số dòng thực tế của các bảng chính — đây là
 cách nhanh nhất để xác nhận backend đã nối đúng database.
 
-### Đổi cổng
+### Tự dò cổng trống (tính năng mới)
+
+Nếu cổng ưu tiên **đã bị ứng dụng khác trên máy chiếm**, backend **không chết** mà tự chuyển sang cổng trống kế
+tiếp. Cơ chế này nằm trong `Program.cs → SyncKestrelEndpoints()`:
+
+1. Endpoint do môi trường chỉ định (`Kestrel__Endpoints__Http__Url` /
+   `ASPNETCORE_URLS`) **và cổng còn trống** → giữ nguyên.
+2. Cổng đã bị chiếm → dò lần lượt 5000, 5002…5099.
+3. Tất cả đều bận → dùng **port 0** (OS tự chọn cổng trống) ⇒ API luôn
+   khởi động được.
+
+Cổng thực tế được công bố qua 2 kênh:
+
+| Kênh | Dùng để |
+| ---- | -------- |
+| `GET /api/health/endpoint` | Script/tool gọi trực tiếp vào API |
+| `erp-fmcg-driver/.api-endpoint.json` | Vite proxy của Driver App tự dò |
+
+Nhờ vậy Driver App không bị "đứt" khi API đổi cổng — vite proxy đọc file
+`.api-endpoint.json` và trỏ đúng cổng.
+
+```powershell
+curl http://localhost:5000/api/health/endpoint
+# {"baseUrl":"http://localhost:5002","port":5002,...}
+```
+
+### Đổi cổng thủ công
 
 `appsettings.json` khai báo cứng endpoint trong mục `Kestrel`. Mục này **ghi đè**
 tham số `--urls`, nên muốn đổi cổng thì sửa file hoặc dùng biến môi trường:
@@ -109,8 +135,9 @@ $env:Kestrel__Endpoints__Http__Url = "http://localhost:5050"
 dotnet run --project src/ERP.FMC.Api
 ```
 
-> Nếu cổng 5000 bị chiếm (một số VPN như TunnelBear dùng cổng này), backend sẽ
-> báo `AddressInUseException`. Đổi cổng như trên hoặc tắt phần mềm đang giữ cổng.
+> Cổng đặt tường minh vẫn được tôn trọng nếu cổng còn trống. Nếu cổng đã
+> bị chiếm, backend ghi cảnh báo `[BOOT] Canh ... da BI CHIEM` rồi tự dò
+> cổng khác — không crash.
 
 ---
 

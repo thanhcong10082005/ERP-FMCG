@@ -231,7 +231,10 @@ export const DeliveryCoreScreen: React.FC = () => {
     );
   }
 
-  const totalPayable = (order.total_amount || 0) + (order.old_debt_amount || 0);
+  // ★ `old_debt_amount` âm = khách đã trả trước (số dư dương) ⇒ không
+  //   phải khoản phải thu. Clamp về 0 để không hiển thị "Phải thu" âm.
+  const oldDebtAmount = Math.max(0, order.old_debt_amount || 0);
+  const totalPayable = (order.total_amount || 0) + oldDebtAmount;
 
   // ── Time blocked ──────────────────────────────────────────
   if (timeBlocked) {
@@ -312,10 +315,10 @@ export const DeliveryCoreScreen: React.FC = () => {
               <p className="text-xs text-text-secondary">Tiền đơn</p>
               <p className="font-bold text-primary">{formatCurrency(order.total_amount)}</p>
             </div>
-            {(order.old_debt_amount ?? 0) > 0 && (
+            {(oldDebtAmount ?? 0) > 0 && (
               <div>
                 <p className="text-xs text-text-secondary">Công nợ cũ</p>
-                <p className="font-bold text-danger">{formatCurrency(order.old_debt_amount)}</p>
+                <p className="font-bold text-danger">{formatCurrency(oldDebtAmount)}</p>
               </div>
             )}
             <div className="ml-auto text-right">

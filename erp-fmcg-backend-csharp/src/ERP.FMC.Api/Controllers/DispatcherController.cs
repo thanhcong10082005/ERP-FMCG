@@ -31,7 +31,7 @@ namespace ERP.FMC.Api.Controllers;
 [ApiController]
 [Route("api/dispatcher")]
 [Produces("application/json")]
-[Authorize(Roles = "Admin,Dispatcher,Manager")]
+[Authorize(Policy = "DispatcherRole")]
 public class DispatcherController : ControllerBase
 {
     private readonly IDispatcherService _dispatcher;

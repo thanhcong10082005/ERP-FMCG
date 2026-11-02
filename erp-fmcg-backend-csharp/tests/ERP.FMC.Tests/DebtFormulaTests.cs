@@ -209,14 +209,119 @@ public class DebtFormulaTests
     [Fact]
     public async Task Collecting_More_Than_OldDebt_Is_Clamped_To_Zero()
     {
-        // Khách chỉ có 100.000 nợ cũ nhưng tài xế thu 300.000 ⇒ clamp về 0.
+        // ★ ĐÃ ĐỔI: server TỪ CHỐI thay vì clamp về 0.
+        //   Giữ test lại để ghi nhận hành vi mới: POD bị chặn, công nợ
+        //   của khách KHÔNG bị xoá.
         var (svc, tripOrderId, _, partnerId) = Setup(oldDebt: 100_000m, currentDebt: 0m);
 
-        await svc.CreatePodAsync(Pod(tripOrderId, oldCash: 300_000m), null);
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CreatePodAsync(Pod(tripOrderId, oldCash: 300_000m), null));
+
+        var partner = GetPartner(partnerId);
+        Assert.Equal(100_000m, partner.OldDebt);
+        Assert.Equal(0m, partner.CurrentDebt);   // không âm
+    }
+
+    // ===================================================================
+    // ★ SỐ DƯƠNG (KHÁCH TRẢ TRƯỚC) — regression
+    // -------------------------------------------------------------------
+    // Bug: `old_debt` ÂM = khách đã trả trước (số dư dương của ERP).
+    //      Code cũ: `OldDebt = OldDebt - thu; if (OldDebt < 0) OldDebt = 0;`
+    //      ⇒ MỘT POD thu 0đ cũng xoá sạch số dư dương của khách.
+    //      Đã xác nhận mất 660.000đ ở KH CT00608580.
+    // ===================================================================
+
+    [Fact]
+    public async Task CreditBalancePartner_PodCollectingZero_Does_Not_EraseCreditBalance()
+    {
+        // Khách trả trước 660.000 (old_debt = -660.000), current_debt = -660.000.
+        // POD thu 0đ ⇒ KHÔNG được đụng tới số dư dương.
+        var (svc, tripOrderId, _, partnerId) =
+            Setup(oldDebt: -660_000m, currentDebt: -660_000m);
+
+        await svc.CreatePodAsync(Pod(tripOrderId), null);
+
+        var partner = GetPartner(partnerId);
+        Assert.Equal(-660_000m, partner.OldDebt);        // GIỮ NGUYÊN
+        Assert.Equal(-660_000m, partner.CurrentDebt);    // GIỮ NGUYÊN
+    }
+
+    [Fact]
+    public async Task CreditBalancePartner_CollectingOldDebt_KeepsCreditBalanceIntact()
+    {
+        // Khách trả trước 660.000 nhưng tài xế "thu công nợ cũ" 100.000.
+        // ⇒ Không có nợ cũ để thu ⇒ server TỪ CHỐI (HTTP 400).
+        var (svc, tripOrderId, _, partnerId) =
+            Setup(oldDebt: -660_000m, currentDebt: -660_000m);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CreatePodAsync(Pod(tripOrderId, oldCash: 100_000m), null));
+        Assert.Contains("vuot qua no cu thuc te", ex.Message);
+
+        var partner = GetPartner(partnerId);
+        Assert.Equal(-660_000m, partner.OldDebt);        // KHÔNG bị đụng
+        Assert.Equal(-660_000m, partner.CurrentDebt);    // KHÔNG bị đụng
+    }
+
+    [Fact]
+    public async Task CreditBalancePartner_PodWithNewOrderCredit_KeepsCreditBalance()
+    {
+        // Ghi nợ đơn mới 20.000 trên khách có số dư dương.
+        var (svc, tripOrderId, _, partnerId) =
+            Setup(oldDebt: -100_000m, currentDebt: -100_000m);
+
+        await svc.CreatePodAsync(Pod(tripOrderId, newCredit: 20_000m), null);
+
+        var partner = GetPartner(partnerId);
+        Assert.Equal(-100_000m, partner.OldDebt);
+        Assert.Equal(-80_000m, partner.CurrentDebt);   // -100.000 + 20.000
+    }
+
+    [Fact]
+    public void OutstandingDebt_OnlyCountsPositiveAmount()
+    {
+        Assert.Equal(0m, DebtSignConventions.OutstandingDebt(-660_000m));
+        Assert.Equal(660_000m, DebtSignConventions.OutstandingDebt(660_000m));
+        Assert.Equal(0m, DebtSignConventions.OutstandingDebt(0m));
+    }
+
+    [Fact]
+    public void CreditBalance_OnlyCountsNegativeAmount()
+    {
+        Assert.Equal(660_000m, DebtSignConventions.CreditBalance(-660_000m));
+        Assert.Equal(0m, DebtSignConventions.CreditBalance(660_000m));
+        Assert.Equal(0m, DebtSignConventions.CreditBalance(0m));
+    }
+
+    [Fact]
+    public async Task PositiveDebtPartner_CollectingTooMuch_Is_Rejected_Not_SilentlyClamped()
+    {
+        // ★ Chốt nghiệp vụ: thu công nợ cũ vượt nợ thực tế
+        //   ⇒ server TỪ CHỐI (HTTP 400), KHÔNG clamp về 0.
+        //   Lý do: clamp về 0 làm mất phần nợ cũ CHƯA THU ĐƯỢC ⇒ mất
+        //   tiền thật mà không ai biết.
+        var (svc, tripOrderId, _, partnerId) = Setup(oldDebt: 100_000m, currentDebt: 100_000m);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CreatePodAsync(Pod(tripOrderId, oldCash: 300_000m), null));
+        Assert.Contains("vuot qua no cu thuc te", ex.Message);
+
+        var partner = GetPartner(partnerId);
+        Assert.Equal(100_000m, partner.OldDebt);       // KHÔNG bị xoá
+        Assert.Equal(100_000m, partner.CurrentDebt);   // KHÔNG bị xoá
+    }
+
+    [Fact]
+    public async Task PositiveDebtPartner_CollectingExactlyOutstanding_Is_Accepted()
+    {
+        // Biên: thu đúng bằng nợ cũ ⇒ chấp nhận, old_debt → 0.
+        var (svc, tripOrderId, _, partnerId) = Setup(oldDebt: 100_000m, currentDebt: 100_000m);
+
+        await svc.CreatePodAsync(Pod(tripOrderId, oldCash: 100_000m), null);
 
         var partner = GetPartner(partnerId);
         Assert.Equal(0m, partner.OldDebt);
-        Assert.Equal(0m, partner.CurrentDebt);   // không âm
+        Assert.Equal(0m, partner.CurrentDebt);
     }
 
     // ===================================================================

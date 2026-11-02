@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ERP.FMC.Infrastructure.Data;
@@ -6,6 +7,10 @@ namespace ERP.FMC.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+// ★ Health check là endpoint CÔNG KHAI: monitor / load balancer / uptime
+//   cần gọi được mà không có token. Mọi endpoint khác mặc định đã bị
+//   FallbackPolicy chặn (xem Program.cs → AddAuthorization).
+[AllowAnonymous]
 public class HealthController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -100,7 +105,7 @@ public class HealthController : ControllerBase
             if (!exists) criticalFailures++;
             checks.Add(new
             {
-                name = $"table_tenant.{table}",
+                name = $"table.{table}",
                 status = exists ? "PASS" : "FAIL",
                 detail = exists ? "Tồn tại" : "THIẾU BẢNG — cần chạy migration"
             });
@@ -213,12 +218,21 @@ public class HealthController : ControllerBase
             });
     }
 
-    /// <summary>Kiểm tra 1 bảng trong schema `tenant` có tồn tại không.</summary>
+    /// <summary>
+    /// Kiểm tra 1 bảng trong schema `tenant` có tồn tại không.
+    ///
+    /// LƯU Ý QUAN TRỌNG: KHÔNG được nội suy tên bảng vào string literal `N'...'`.
+    /// EF Core sẽ parameterize biến C# thành `@p0`; nếu nằm bên trong string literal
+    /// thì SQL Server KHÔNG thay thế placeholder, kết quả OBJECT_ID('tenant.@p0') = NULL
+    /// ⇒ check luôn FAIL dù bảng đã tồn tại (false negative).
+    /// Vì vậy ta truyền tên bảng như tham số thật và ghép chuỗi ở mức SQL.
+    /// </summary>
     private async Task<bool> TableExistsAsync(string tableName)
     {
-        var rows = await _db.Database.SqlQuery<int>($"""
-            SELECT CASE WHEN OBJECT_ID(N'tenant.{tableName}', N'U') IS NULL THEN 0 ELSE 1 END AS Value
+        var rows = await _db.Database.SqlQuery<int>($$"""
+            SELECT CASE WHEN OBJECT_ID(N'tenant.' + {{tableName}}, N'U') IS NULL THEN 0 ELSE 1 END AS Value
             """).ToListAsync();
+
         return rows.FirstOrDefault() == 1;
     }
 }

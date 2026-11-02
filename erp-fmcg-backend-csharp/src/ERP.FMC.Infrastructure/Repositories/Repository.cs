@@ -126,9 +126,78 @@ public class UnitOfWork : IUnitOfWork
 
     public Task<int> SaveChangesAsync() => _context.SaveChangesAsync();
 
+    /// <inheritdoc />
+    public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct = default)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        // EF Core 8: IExecutionStrategy.ExecuteAsync<TState, TResult> yêu cầu
+        // TState + verifySucceeded. Dùng overload không kiểm tra (null) để mọi
+        // lỗi đều được retry theo chính sách của strategy.
+        return await strategy.ExecuteAsync<object?, T>(
+            state: null,
+            operation: async (_, _, token) =>
+            {
+                // Nếu đã có transaction mở sẵn (do code cũ gọi BeginTransactionAsync)
+                // thì dùng transaction đó, không mở thêm.
+                var ownsTransaction = _context.Database.CurrentTransaction == null;
+                var tx = ownsTransaction
+                    ? await _context.Database.BeginTransactionAsync(token)
+                    : _context.Database.CurrentTransaction!;
+
+                try
+                {
+                    var result = await operation();
+                    await tx.CommitAsync(token);
+                    return result;
+                }
+                catch
+                {
+                    try { await tx.RollbackAsync(token); } catch { /* lỗi rollback không che lỗi gốc */ }
+                    throw;
+                }
+                finally
+                {
+                    if (ownsTransaction)
+                    {
+                        await tx.DisposeAsync();
+                    }
+                }
+            },
+            verifySucceeded: null,
+            cancellationToken: ct);
+    }
+
+    /// <summary>
+    /// Mở transaction theo cách tương thích với <c>SqlServerRetryingExecutionStrategy</c>.
+    ///
+    /// BUG ĐÃ SỬA: khi DbContext được cấu hình <c>EnableRetryOnFailure</c>, EF Core dùng
+    /// execution strategy KHÔNG cho phép user khởi tạo transaction thủ công
+    /// (<c>BeginTransactionAsync</c> ném InvalidOperationException:
+    /// "The configured execution strategy ... does not support user-initiated transactions").
+    /// Hệ quả: MỌI thao tác ghi dữ liệu bọc trong transaction (tạo đơn hàng, commit
+    /// import, ghi POD...) đều lỗi 500 ⇒ nghiệp vụ giao hàng không dùng được.
+    ///
+    /// ƯU TIÊN: dùng <c>ExecuteInTransactionAsync</c> để bọc trọn khối (bắt buộc về
+    /// mặt ngữ nghĩa retry). Hàm này giữ lại để các luồng cũ vẫn chạy được.
+    /// </summary>
     public async Task BeginTransactionAsync()
     {
-        _transaction = await _context.Database.BeginTransactionAsync();
+        // Nếu đã có transaction đang mở thì không mở thêm.
+        if (_context.Database.CurrentTransaction != null) return;
+
+        var strategy = _context.Database.CreateExecutionStrategy();
+        _transaction = await strategy.ExecuteAsync(async () =>
+        {
+            // Nếu strategy retry, transaction cũ (đã lỗi) phải được dispose
+            // trước khi mở cái mới.
+            if (_transaction != null)
+            {
+                await _transaction.DisposeAsync();
+                _transaction = null;
+            }
+            return await _context.Database.BeginTransactionAsync();
+        });
     }
 
     public async Task CommitTransactionAsync()

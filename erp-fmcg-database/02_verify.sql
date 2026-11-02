@@ -492,6 +492,26 @@ WITH checks AS (
            ) AS nvarchar(50)) AS gia_tri,
            '5' AS ky_vong,
            'ge' AS kieu
+    UNION ALL
+    SELECT 55 AS ord, 'OPS-21' AS ma, 'OPS' AS nhom, 'CHECK quantity_on_hand >= 0 ton tai' AS kiem_tra,
+           CAST((
+             SELECT COUNT(*) FROM sys.check_constraints
+             WHERE name = 'CK_inventory_balance_qty_non_negative'
+             AND parent_object_id = OBJECT_ID('tenant.inventory_balances')
+             AND is_disabled = 0
+           ) AS nvarchar(50)) AS gia_tri,
+           '1' AS ky_vong,
+           'eq' AS kieu
+    UNION ALL
+    SELECT 56 AS ord, 'OPS-22' AS ma, 'OPS' AS nhom, 'CHECK quantity_on_hand >= 0 duoc TRUST (da kiem duyet du lieu)' AS kiem_tra,
+           CAST((
+             SELECT COUNT(*) FROM sys.check_constraints
+             WHERE name = 'CK_inventory_balance_qty_non_negative'
+             AND parent_object_id = OBJECT_ID('tenant.inventory_balances')
+             AND is_not_trusted = 0
+           ) AS nvarchar(50)) AS gia_tri,
+           '1' AS ky_vong,
+           'eq' AS kieu
 )
 SELECT ma, nhom, kiem_tra, gia_tri, ky_vong,
        CASE
